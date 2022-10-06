@@ -21,6 +21,3 @@ config :beaver,
   acc
   shape
   nvvm}
-
-config :beaver, :build_cmake, true
-config :kinda, :force_build, beaver: true
