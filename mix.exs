@@ -25,13 +25,13 @@ defmodule Manx.MixProject do
   defp deps do
     [
       {:nx, "~> 0.2"},
-      {:beaver, "~> 0.2.6"},
+      {:beaver, "~> 0.2.11"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 
   defp description() do
-    "Beaver, a MLIR Toolkit in Elixir"
+    "MLIR backend for Nx"
   end
 
   defp package() do

@@ -5,7 +5,7 @@ defmodule Manx.Defn do
   import Beaver, only: :macros
   require Beaver.MLIR
   alias MLIR.{Type, Attribute}
-  alias MLIR.Dialect.{TOSA, Linalg, Arith}
+  alias MLIR.Dialect.{TOSA, Linalg, Arith, Tensor, Bufferization, Math, SCF, MemRef}
 
   defdelegate gen_type(tensor), to: Manx.Type
 
@@ -403,6 +403,8 @@ defmodule Manx.Defn do
           shape: {}
         } = t
       ) do
+    alias MLIR.Dialect.Complex
+
     mlir block: block, ctx: ctx do
       complex_tensor = gen_op(env, complex_tensor)
       complex_element = Tensor.extract(complex_tensor) >>> Type.complex(Type.f32())
@@ -425,6 +427,8 @@ defmodule Manx.Defn do
           type: complex_type = {:c, 64}
         } = t
       ) do
+    alias MLIR.Dialect.Complex
+
     mlir block: block, ctx: ctx do
       real_tensor = gen_op(env, real_tensor)
       real_tensor = TOSA.cast(real_tensor) >>> Type.ranked_tensor([], Type.f32())
@@ -451,6 +455,8 @@ defmodule Manx.Defn do
           shape: shape
         } = t
       ) do
+    alias MLIR.Dialect.Complex
+
     mlir block: block, ctx: ctx do
       element_cnt = Enum.reduce(Tuple.to_list(shape), 1, &*/2)
       complex_tensor = gen_op(env, complex_tensor)
@@ -491,6 +497,8 @@ defmodule Manx.Defn do
           shape: out_shape
         } = t
       ) do
+    alias MLIR.Dialect.Complex
+
     mlir block: block, ctx: ctx do
       in_tensor = gen_op(env, in_tensor)
 
