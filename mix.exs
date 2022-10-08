@@ -31,7 +31,7 @@ defmodule Manx.MixProject do
   end
 
   defp description() do
-    "Beaver, a MLIR Toolkit in Elixir"
+    "MLIR backend for Nx"
   end
 
   defp package() do

@@ -3,6 +3,8 @@ defmodule Manx.Compiler do
   import MLIR.Sigils
   import Beaver, only: :macros
   require Beaver.MLIR
+  alias Beaver.MLIR.Dialect.{Func}
+  require Func
   @behaviour Nx.Defn.Compiler
   @impl true
   def __jit__(key, vars, fun, [args], _options) do
@@ -99,10 +101,12 @@ defmodule Manx.Compiler do
                 {Manx.Lowering.CPU.lower(ir), []}
 
               :vulkan ->
+                {:ok, llvm_lib_dir} = Beaver.LLVM.Config.lib_dir()
+
                 {Manx.Lowering.Vulkan.lower(ir),
                  [
-                   Beaver.LLVM.Config.lib_dir() |> Path.join("libvulkan-runtime-wrappers.dylib"),
-                   Beaver.LLVM.Config.lib_dir() |> Path.join("libmlir_runner_utils.dylib")
+                   llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib"),
+                   llvm_lib_dir |> Path.join("libmlir_runner_utils.dylib")
                  ]}
             end
         end

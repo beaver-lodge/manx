@@ -1,6 +1,6 @@
 # 🐱 Manx 🐈
 
-**M**LIR-**A**ccelerated-**Nx**. Beaver compiler/backend for the [Nx](https://github.com/elixir-nx/nx/tree/main/nx#readme).
+**M**LIR-**A**ccelerated-**Nx**. MLIR compiler/backend for the [Nx](https://github.com/elixir-nx/nx/tree/main/nx#readme).
 
 ## Why do we need it?
 
