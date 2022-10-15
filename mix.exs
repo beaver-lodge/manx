@@ -4,7 +4,7 @@ defmodule Manx.MixProject do
   def project do
     [
       app: :manx,
-      version: "0.1.1",
+      version: "0.1.2",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -25,7 +25,7 @@ defmodule Manx.MixProject do
   defp deps do
     [
       {:nx, "~> 0.2"},
-      {:beaver, "~> 0.2.11"},
+      {:beaver, "~> 0.2.12"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end

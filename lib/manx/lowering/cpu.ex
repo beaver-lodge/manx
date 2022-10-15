@@ -24,7 +24,7 @@ defmodule Manx.Lowering.CPU do
       tosa_to_linalg_named(),
       tosa_to_linalg(),
       linalg_fuse_elementwise_ops(),
-      linalg_init_tensor_to_alloc_tensor(),
+      "tosa-layerwise-constant-fold",
       linalg_bufferize(),
       convert_linalg_to_loops(),
       lower_affine(),
