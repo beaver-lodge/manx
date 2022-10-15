@@ -343,14 +343,16 @@ defmodule Manx.Defn do
           fn axis, {in_shape, mlir_value} ->
             out_shape = List.replace_at(in_shape, axis, 1)
 
+            reduce_attr = [axis: Attribute.integer(Type.i64(), axis)]
+
             reduced =
               case op do
                 :all ->
-                  TOSA.reduce_all(mlir_value, axis: Attribute.integer(Type.i64(), axis)) >>>
+                  TOSA.reduce_all(mlir_value, reduce_attr) >>>
                     gen_type(%{t | shape: List.to_tuple(out_shape), type: {:u, 1}})
 
                 :sum ->
-                  TOSA.reduce_sum(mlir_value, axis: Attribute.integer(Type.i64(), axis)) >>>
+                  TOSA.reduce_sum(mlir_value, reduce_attr) >>>
                     gen_type(%{t | shape: List.to_tuple(out_shape)})
               end
 
@@ -779,7 +781,7 @@ defmodule Manx.Defn do
       output_type = gen_type(t)
 
       out_tensor =
-        Linalg.init_tensor(
+        Tensor.empty(
           static_sizes:
             Tuple.to_list(t.shape)
             |> Enum.map(&MLIR.Attribute.integer(Type.i64(), &1))

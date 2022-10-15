@@ -36,8 +36,8 @@ defmodule Manx.Compiler do
       if arg0 do
         with %Manx{device: :vulkan} <- arg0.data do
           [
-            "spv.target_env":
-              ~a"#spv.target_env<#spv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spv.resource_limits<>>"
+            "spirv.target_env":
+              ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
           ]
         else
           _ -> []

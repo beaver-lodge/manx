@@ -7,8 +7,8 @@ defmodule Manx.Lowering.Vulkan.PutSPVAttrPass do
   def run(op) do
     [
       "gpu.kernel": Beaver.MLIR.Attribute.unit(),
-      "spv.entry_point_abi":
-        ~a{#spv.entry_point_abi<local_size = dense<[1, 1, 1]> : vector<3xi32>>}
+      "spirv.entry_point_abi":
+        ~a{#spirv.entry_point_abi<local_size = dense<[1, 1, 1]> : vector<3xi32>>}
     ]
     |> Enum.each(fn {name, attr} ->
       ctx = MLIR.CAPI.mlirOperationGetContext(op)
