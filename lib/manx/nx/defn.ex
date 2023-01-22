@@ -1,5 +1,6 @@
 defmodule Manx.Defn do
   alias __MODULE__.Env
+  use Beaver
   alias Beaver.MLIR
   import MLIR.Sigils
   import Beaver, only: :macros
@@ -73,7 +74,7 @@ defmodule Manx.Defn do
   end
 
   defp gen_iterator_types({_}, {_}) do
-    ~a{["parallel"]}
+    ~a{[#linalg.iterator_type<parallel>]}
   end
 
   defp gen_iterator_types({}, {}, _output) do
@@ -85,10 +86,10 @@ defmodule Manx.Defn do
 
     case tuple_size(input1) do
       1 ->
-        ~a{["parallel"]}
+        ~a{[#linalg.iterator_type<parallel>]}
 
       2 ->
-        ~a{["parallel", "parallel"]}
+        ~a{[#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>]}
     end
   end
 
@@ -413,7 +414,7 @@ defmodule Manx.Defn do
       conjugate_element = Complex.conj(complex_element) >>> Type.complex(Type.f32())
 
       conjugate_tensor =
-        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0])) >>>
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
           gen_type(t)
 
       Tensor.insert(conjugate_element, conjugate_tensor) >>>
@@ -437,7 +438,7 @@ defmodule Manx.Defn do
       real = Tensor.extract(real_tensor) >>> Type.f32()
 
       conjugate_tensor =
-        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0])) >>>
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
           gen_type(t)
 
       imaginary = Arith.constant(value: Attribute.float(Type.f32(), 0.0)) >>> Type.f32()
@@ -467,7 +468,7 @@ defmodule Manx.Defn do
       step = Arith.constant(value: Attribute.integer(Type.index(), 1)) >>> Type.index()
 
       conjugate_tensor =
-        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0])) >>>
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
           gen_type(t)
 
       conjugate_memref =
@@ -505,7 +506,7 @@ defmodule Manx.Defn do
       in_tensor = gen_op(env, in_tensor)
 
       out_tensor =
-        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0])) >>>
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
           gen_type(t)
 
       Linalg.generic [
@@ -548,7 +549,7 @@ defmodule Manx.Defn do
       input_value = TOSA.cast(input_value) >>> gen_type(t)
 
       out_tensor =
-        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0])) >>>
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
           gen_type(t)
 
       Linalg.generic [
@@ -629,7 +630,7 @@ defmodule Manx.Defn do
       b_value = gen_expand(env, b_value, b, t)
 
       out_tensor =
-        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0])) >>>
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
           gen_type(t)
 
       Linalg.generic [
