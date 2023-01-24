@@ -1,4 +1,5 @@
 defmodule Manx.Compiler do
+  use Beaver
   alias Beaver.MLIR
   import MLIR.Sigils
   import Beaver, only: :macros
@@ -30,20 +31,22 @@ defmodule Manx.Compiler do
           acc ++ [Manx.Defn.gen_type(t)]
       end)
 
-    arg0 = args |> List.first()
-
     module_attrs =
-      if arg0 do
-        with %Manx{device: :vulkan} <- arg0.data do
-          [
-            "spirv.target_env":
-              ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
-          ]
-        else
-          _ -> []
-        end
-      else
-        []
+      case args |> List.first() do
+        arg0 when not is_nil(arg0) ->
+          arg0 = arg0 |> apply([])
+
+          with %Manx{device: :vulkan} <- arg0.data do
+            [
+              "spirv.target_env":
+                ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
+            ]
+          else
+            _ -> []
+          end
+
+        _ ->
+          []
       end
 
     ctx = MLIR.Context.create()
@@ -66,8 +69,8 @@ defmodule Manx.Compiler do
 
               entry =
                 MLIR.Block.create(
-                  entry_types |> Enum.map(&Beaver.Deferred.create(&1, MLIR.__CONTEXT__())),
-                  locs |> Enum.map(&Beaver.Deferred.create(&1, MLIR.__CONTEXT__()))
+                  entry_types |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context())),
+                  locs |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context()))
                 )
 
               root = Manx.Defn.gen_op(%Manx.Defn.Env{block: entry, ctx: ctx}, tree)
@@ -82,7 +85,7 @@ defmodule Manx.Compiler do
                 end
               end
 
-              MLIR.__REGION__()
+              Beaver.Env.region()
               |> Beaver.MLIR.CAPI.mlirRegionAppendOwnedBlock(entry)
             end
           end
@@ -90,29 +93,32 @@ defmodule Manx.Compiler do
       end
 
     {llvm_ir, libs} =
-      if arg0 do
-        case arg0.data do
-          %Nx.BinaryBackend{} ->
-            {Manx.Lowering.CPU.lower(ir), []}
+      case args |> List.first() do
+        arg0 when not is_nil(arg0) ->
+          arg0 = arg0 |> apply([])
 
-          %Manx{device: device} ->
-            case device do
-              :host ->
-                {Manx.Lowering.CPU.lower(ir), []}
+          case arg0.data do
+            %Nx.BinaryBackend{} ->
+              {Manx.Lowering.CPU.lower(ir), []}
 
-              :vulkan ->
-                {:ok, llvm_lib_dir} = Beaver.LLVM.Config.lib_dir()
+            %Manx{device: device} ->
+              case device do
+                :host ->
+                  {Manx.Lowering.CPU.lower(ir), []}
 
-                {Manx.Lowering.Vulkan.lower(ir),
-                 [
-                   llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib"),
-                   llvm_lib_dir |> Path.join("libmlir_runner_utils.dylib")
-                 ]}
-            end
-        end
-      else
-        # If all args are materialized as constants, let's assume it's all cpu
-        {Manx.Lowering.CPU.lower(ir), []}
+                :vulkan ->
+                  {:ok, llvm_lib_dir} = LLVMConfig.lib_dir()
+
+                  {Manx.Lowering.Vulkan.lower(ir),
+                   [
+                     llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib"),
+                     llvm_lib_dir |> Path.join("libmlir_runner_utils.dylib")
+                   ]}
+              end
+          end
+
+        _ ->
+          {Manx.Lowering.CPU.lower(ir), []}
       end
 
     jit =
@@ -157,6 +163,7 @@ defmodule Manx.Compiler do
   - If it is a tensor, return a memref
   - If it is a tuple, recursively pack them into one struct.
   """
+  def memref_from_tensor(f) when is_function(f), do: f.() |> memref_from_tensor
   def memref_from_tensor(%Nx.Tensor{data: %Manx{memory: memory}}), do: memory
 
   def memref_from_tensor(
@@ -178,7 +185,7 @@ defmodule Manx.Compiler do
 
     # TODO: support array of memref descriptor of different kinds
     first = mems |> List.first()
-    kind = first.descriptor.kind
+    kind = first.descriptor.descriptor_kind
 
     refs =
       mems
@@ -222,7 +229,7 @@ defmodule Manx.Compiler do
         mem = %Beaver.Native.Memory{
           descriptor: %Beaver.Native.Memory.Descriptor{
             ref: ref,
-            kind: element_kind
+            descriptor_kind: element_kind
           }
         }
 

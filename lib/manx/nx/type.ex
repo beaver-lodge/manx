@@ -1,6 +1,6 @@
 defmodule Manx.Type do
   require Beaver.MLIR
-  alias Beaver.MLIR.{Type, Attribute}
+  alias Beaver.MLIR.Type
 
   @moduledoc """
   Helper functions for defining functions and operations.

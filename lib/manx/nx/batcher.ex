@@ -2,6 +2,7 @@ defmodule Manx.Nx.Batcher do
   alias Beaver.MLIR
   require Beaver.MLIR
   alias MLIR.Attribute
+  import MLIR.Sigils
   defstruct [:tensor, :contract_axes, :batch_axes]
 
   def from_args([
@@ -120,11 +121,11 @@ defmodule Manx.Nx.Batcher do
       )
       when length(contract_axes_a) == length(contract_axes_b) do
     contract_iterator_types =
-      Attribute.string("reduction")
+      ~a{#linalg.iterator_type<reduction>}
       |> List.duplicate(length(contract_axes_a))
 
     outer_iterator_types =
-      Attribute.string("parallel")
+      ~a{#linalg.iterator_type<parallel>}
       |> List.duplicate(tuple_size(c.shape))
 
     Enum.concat(contract_iterator_types, outer_iterator_types)

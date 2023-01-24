@@ -9,12 +9,8 @@ defmodule Manx.Lowering.CPU do
     op
     |> MLIR.Operation.verify!(dump_if_fail: true)
     |> canonicalize
-    |> MLIR.Pass.Composer.nested("func.func", fn pm ->
-      MLIR.Pass.pipeline!(pm, "tosa-make-broadcastable")
-    end)
-    |> MLIR.Pass.Composer.nested("func.func", fn pm ->
-      MLIR.Pass.pipeline!(pm, "tosa-layerwise-constant-fold")
-    end)
+    |> MLIR.Pass.Composer.nested("func.func", "tosa-make-broadcastable")
+    |> MLIR.Pass.Composer.nested("func.func", "tosa-layerwise-constant-fold")
     |> cse
     |> tosa_to_scf
     |> tosa_to_arith
@@ -34,13 +30,9 @@ defmodule Manx.Lowering.CPU do
       "arith-expand",
       "memref-expand"
     ])
-    |> MLIR.Pass.Composer.nested("func.func", fn pm ->
-      MLIR.Pass.pipeline!(pm, "tensor-bufferize")
-    end)
-    |> MLIR.Pass.Composer.pipeline("arith-bufferize,func-bufferize")
-    |> MLIR.Pass.Composer.nested("func.func", fn pm ->
-      MLIR.Pass.pipeline!(pm, "llvm-request-c-wrappers")
-    end)
+    |> MLIR.Pass.Composer.nested("func.func", "tensor-bufferize")
+    |> MLIR.Pass.Composer.append("arith-bufferize,func-bufferize")
+    |> MLIR.Pass.Composer.nested("func.func", "llvm-request-c-wrappers")
     |> convert_math_to_libm
     |> convert_complex_to_standard()
     |> convert_vector_to_llvm
