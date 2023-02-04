@@ -940,4 +940,27 @@ defmodule Manx.ExprTest do
       )
     end
   end
+
+  describe "creation" do
+    defn iota, do: Nx.iota({10, 10})
+
+    test "iota" do
+      %{data: %Manx{}} = tensor = iota()
+      assert Nx.backend_transfer(tensor) == Nx.iota({10, 10}, backend: Nx.BinaryBackend)
+    end
+
+    defn iota0, do: Nx.iota({10, 10}, axis: 0)
+
+    test "iota0" do
+      %{data: %Manx{}} = tensor = iota0()
+      assert Nx.backend_transfer(tensor) == Nx.iota({10, 10}, axis: 0, backend: Nx.BinaryBackend)
+    end
+
+    defn iota1, do: Nx.iota({10, 10}, axis: 1)
+
+    test "iota1" do
+      %{data: %Manx{}} = tensor = iota1()
+      assert Nx.backend_transfer(tensor) == Nx.iota({10, 10}, axis: 1, backend: Nx.BinaryBackend)
+    end
+  end
 end

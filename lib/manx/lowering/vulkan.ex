@@ -15,7 +15,9 @@ defmodule Manx.Lowering.Vulkan do
     |> tosa_to_tensor()
     |> convert_tensor_to_linalg()
     |> MLIR.Pass.Composer.nested("func.func", [
+      tosa_to_linalg_named(),
       tosa_to_linalg(),
+      linalg_generalize_named_ops(),
       linalg_fuse_elementwise_ops(),
       linalg_bufferize(),
       convert_linalg_to_parallel_loops(),
@@ -36,23 +38,19 @@ defmodule Manx.Lowering.Vulkan do
       }
     ])
     |> MLIR.Pass.Composer.nested("func.func", "tensor-bufferize")
-    |> MLIR.Pass.Composer.nested("func.func", [
-      linalg_bufferize(),
-      convert_linalg_to_loops(),
-      lower_affine(),
-      convert_math_to_llvm(),
-      convert_arith_to_llvm(),
-      convert_scf_to_cf(),
-      "arith-expand",
-      "memref-expand"
-    ])
     |> MLIR.Pass.Composer.nested("gpu.module", [
       {
         :nested,
         "gpu.func",
         [
+          convert_memref_to_spirv(),
           convert_math_to_spirv(),
-          convert_cf_to_spirv()
+          convert_arith_to_spirv(),
+          convert_cf_to_spirv(),
+          convert_tensor_to_spirv(),
+          convert_vector_to_spirv(),
+          convert_func_to_spirv(),
+          convert_scf_to_spirv()
         ]
       }
     ])
@@ -70,6 +68,6 @@ defmodule Manx.Lowering.Vulkan do
     |> convert_func_to_llvm
     |> reconcile_unrealized_casts
     |> launch_func_to_vulkan
-    |> MLIR.Pass.Composer.run!(dump_if_fail: false, print: Manx.Flags.print_ir?())
+    |> MLIR.Pass.Composer.run(dump_if_fail: false, print: Manx.Flags.print_ir?())
   end
 end

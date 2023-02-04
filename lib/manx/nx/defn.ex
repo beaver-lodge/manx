@@ -46,6 +46,14 @@ defmodule Manx.Defn do
     List.to_tuple(expanded)
   end
 
+  defp gen_indexing_maps(out_shape) do
+    [
+      gen_affine_map(out_shape)
+    ]
+    |> Enum.map(&MLIR.Attribute.affine_map/1)
+    |> Attribute.array()
+  end
+
   defp gen_indexing_maps(input1_shape, out_shape) do
     [
       expand_for_output(input1_shape, out_shape) |> gen_affine_map(),
@@ -77,6 +85,16 @@ defmodule Manx.Defn do
     ~a{[#linalg.iterator_type<parallel>]}
   end
 
+  defp gen_iterator_types(input, output) when input == output do
+    case tuple_size(input) do
+      1 ->
+        ~a{[#linalg.iterator_type<parallel>]}
+
+      2 ->
+        ~a{[#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>]}
+    end
+  end
+
   defp gen_iterator_types({}, {}, _output) do
     ~a{[]}
   end
@@ -91,6 +109,13 @@ defmodule Manx.Defn do
       2 ->
         ~a{[#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>]}
     end
+  end
+
+  defp gen_iterator_types(output) do
+    for _ <- output |> Tuple.to_list() do
+      ~a{#linalg.iterator_type<parallel>}
+    end
+    |> Attribute.array()
   end
 
   defp gen_expand(
@@ -782,12 +807,8 @@ defmodule Manx.Defn do
       output_type = gen_type(t)
 
       out_tensor =
-        Tensor.empty(
-          static_sizes:
-            Tuple.to_list(t.shape)
-            |> Enum.map(&MLIR.Attribute.integer(Type.i64(), &1))
-            |> Attribute.array()
-        ) >>> output_type
+        Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
+          output_type
 
       zero =
         case t.type do
@@ -840,6 +861,25 @@ defmodule Manx.Defn do
           end
         end
       end >>> output_type
+    end
+  end
+
+  def gen_op(
+        %Env{block: block, ctx: ctx} = env,
+        %Nx.Tensor{
+          data: %Nx.Defn.Expr{
+            op: :concatenate,
+            args: [
+              inputs,
+              axis
+            ]
+          }
+        } = t
+      )
+      when is_list(inputs) do
+    mlir block: block, ctx: ctx do
+      inputs = inputs |> Enum.map(&gen_op(env, &1))
+      TOSA.concat(inputs, axis: Attribute.integer(Type.i(64), axis)) >>> gen_type(t)
     end
   end
 
@@ -997,6 +1037,69 @@ defmodule Manx.Defn do
     end
   end
 
+  def gen_op(
+        %Env{block: block, ctx: ctx} = env,
+        %Nx.Tensor{data: %Nx.Defn.Expr{op: :reshape, args: [input]}} = t
+      ) do
+    mlir block: block, ctx: ctx do
+      input = gen_op(env, input)
+
+      new_shape =
+        t.shape
+        |> Tuple.to_list()
+        |> Attribute.dense_array(Beaver.Native.I64)
+
+      TOSA.reshape(input, new_shape: new_shape) >>> gen_type(t)
+    end
+  end
+
+  def gen_op(
+        %Env{block: block, ctx: ctx} = env,
+        %Nx.Tensor{data: %Nx.Defn.Expr{op: :iota, args: [axis]} = expr, shape: out_shape} = t
+      ) do
+    if axis do
+      mlir block: block, ctx: ctx do
+        out_tensor =
+          Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
+            gen_type(t)
+
+        Linalg.generic [
+          out_tensor,
+          operand_segment_sizes: ODS.operand_segment_sizes([0, 1]),
+          indexing_maps: gen_indexing_maps(out_shape),
+          iterator_types: gen_iterator_types(out_shape)
+        ] do
+          region do
+            block bb0(arg1 >>> gen_type(t.type)) do
+              %MLIR.Value{} = arg1
+              index = Linalg.index(dim: Attribute.integer(Type.i64(), axis)) >>> Type.index()
+              cast = Arith.index_cast(index) >>> gen_type(t.type)
+              Linalg.yield(cast) >>> []
+            end
+          end
+        end >>> gen_type(t)
+      end
+    else
+      mlir block: block, ctx: ctx do
+        dim = t.shape |> Tuple.to_list() |> Enum.reduce(1, &Kernel.*/2)
+
+        permutation_1d =
+          gen_op(
+            env,
+            %{t | data: %{expr | args: [0]}, shape: {dim}}
+          )
+
+        new_shape =
+          t.shape
+          |> Tuple.to_list()
+          |> Attribute.dense_array(Beaver.Native.I64)
+
+        # this should generate affine.apply for index
+        TOSA.reshape(permutation_1d, new_shape: new_shape) >>> gen_type(t)
+      end
+    end
+  end
+
   def gen_op(%Env{} = env, tuple) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
@@ -1005,6 +1108,6 @@ defmodule Manx.Defn do
   end
 
   def gen_op(_, tensor) do
-    raise "op not supported: " <> inspect(tensor, structs: false, pretty: true)
+    raise "op not supported: " <> inspect(tensor)
   end
 end
