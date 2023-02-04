@@ -121,6 +121,16 @@ defmodule Manx.Compiler do
           {Manx.Lowering.CPU.lower(ir), []}
       end
 
+    llvm_ir =
+      case llvm_ir do
+        {:ok, op} ->
+          op
+
+        {:error, msg} ->
+          MLIR.Context.destroy(ctx)
+          raise msg
+      end
+
     jit =
       llvm_ir
       |> MLIR.ExecutionEngine.create!(shared_lib_paths: libs)

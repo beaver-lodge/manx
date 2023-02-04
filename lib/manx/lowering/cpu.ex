@@ -7,7 +7,7 @@ defmodule Manx.Lowering.CPU do
   """
   def lower(op) do
     op
-    |> MLIR.Operation.verify!(dump_if_fail: true)
+    |> MLIR.Operation.verify!()
     |> canonicalize
     |> MLIR.Pass.Composer.nested("func.func", "tosa-make-broadcastable")
     |> MLIR.Pass.Composer.nested("func.func", "tosa-layerwise-constant-fold")
@@ -40,6 +40,6 @@ defmodule Manx.Lowering.CPU do
     |> convert_complex_to_llvm()
     |> convert_func_to_llvm
     |> reconcile_unrealized_casts
-    |> MLIR.Pass.Composer.run!(dump_if_fail: true, print: Manx.Flags.print_ir?())
+    |> MLIR.Pass.Composer.run(print: Manx.Flags.print_ir?())
   end
 end
