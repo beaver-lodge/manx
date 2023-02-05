@@ -959,6 +959,16 @@ defmodule Manx.Defn do
 
   def gen_op(
         %Env{block: block, ctx: ctx} = env,
+        %Nx.Tensor{data: %Nx.Defn.Expr{op: :as_type, args: [input1]}} = t
+      ) do
+    mlir block: block, ctx: ctx do
+      input1_value = gen_op(env, input1)
+      TOSA.cast(input1_value) >>> gen_type(t)
+    end
+  end
+
+  def gen_op(
+        %Env{block: block, ctx: ctx} = env,
         %Nx.Tensor{data: %Nx.Defn.Expr{op: :iota, args: [axis]} = expr, shape: out_shape} = t
       ) do
     if axis do
