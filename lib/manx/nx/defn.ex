@@ -22,102 +22,6 @@ defmodule Manx.Defn do
 
   def gen_root_types(type), do: [gen_type(type)]
 
-  defp gen_affine_map(shape) do
-    import MLIR.AffineMap
-    rank = tuple_size(shape)
-
-    exprs =
-      shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.map(fn
-        {1, _index} -> 0
-        {dim_size, index} when dim_size > 1 -> dim(index)
-      end)
-
-    MLIR.AffineMap.create(rank, 0, exprs)
-  end
-
-  defp expand_for_output(input_shape, output_shape)
-       when tuple_size(output_shape) >= tuple_size(input_shape) do
-    output_rank = tuple_size(output_shape)
-    rank = tuple_size(input_shape)
-    expanded = List.duplicate(1, output_rank - rank) ++ Tuple.to_list(input_shape)
-    List.to_tuple(expanded)
-  end
-
-  defp gen_indexing_maps(out_shape) do
-    [
-      gen_affine_map(out_shape)
-    ]
-    |> Enum.map(&MLIR.Attribute.affine_map/1)
-    |> Attribute.array()
-  end
-
-  defp gen_indexing_maps(input1_shape, out_shape) do
-    [
-      expand_for_output(input1_shape, out_shape) |> gen_affine_map(),
-      gen_affine_map(out_shape)
-    ]
-    |> Enum.map(&MLIR.Attribute.affine_map/1)
-    |> Attribute.array()
-  end
-
-  defp gen_indexing_maps(
-         input1_shape,
-         input2_shape,
-         out_shape
-       ) do
-    [
-      expand_for_output(input1_shape, out_shape) |> gen_affine_map(),
-      expand_for_output(input2_shape, out_shape) |> gen_affine_map(),
-      gen_affine_map(out_shape)
-    ]
-    |> Enum.map(&MLIR.Attribute.affine_map/1)
-    |> Attribute.array()
-  end
-
-  defp gen_iterator_types({}, {}) do
-    ~a{[]}
-  end
-
-  defp gen_iterator_types({_}, {_}) do
-    ~a{[#linalg.iterator_type<parallel>]}
-  end
-
-  defp gen_iterator_types(input, output) when input == output do
-    case tuple_size(input) do
-      1 ->
-        ~a{[#linalg.iterator_type<parallel>]}
-
-      2 ->
-        ~a{[#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>]}
-    end
-  end
-
-  defp gen_iterator_types({}, {}, _output) do
-    ~a{[]}
-  end
-
-  defp gen_iterator_types(input1, _input2, output) do
-    input1 = expand_for_output(input1, output)
-
-    case tuple_size(input1) do
-      1 ->
-        ~a{[#linalg.iterator_type<parallel>]}
-
-      2 ->
-        ~a{[#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>]}
-    end
-  end
-
-  defp gen_iterator_types(output) do
-    for _ <- output |> Tuple.to_list() do
-      ~a{#linalg.iterator_type<parallel>}
-    end
-    |> Attribute.array()
-  end
-
   defp gen_expand(
          _env,
          value,
@@ -135,7 +39,7 @@ defmodule Manx.Defn do
          %{shape: out_shape} = _output_t
        ) do
     mlir block: block, ctx: ctx do
-      shape = expand_for_output(in_shape, out_shape)
+      shape = Manx.Linalg.expand_for_output(in_shape, out_shape)
       t = %{input_t | type: type, shape: shape}
       rank_diff = tuple_size(out_shape) - tuple_size(in_shape)
 
@@ -538,8 +442,8 @@ defmodule Manx.Defn do
         in_tensor,
         out_tensor,
         operand_segment_sizes: ODS.operand_segment_sizes([1, 1]),
-        indexing_maps: gen_indexing_maps(in_shape, out_shape),
-        iterator_types: gen_iterator_types(in_shape, out_shape)
+        indexing_maps: Manx.Linalg.gen_indexing_maps(in_shape, out_shape),
+        iterator_types: Manx.Linalg.gen_iterator_types(in_shape, out_shape)
       ] do
         region do
           block bb0(arg0 >>> Type.complex(Type.f32()), arg1 >>> Type.f(32)) do
@@ -581,8 +485,8 @@ defmodule Manx.Defn do
         input_value,
         out_tensor,
         operand_segment_sizes: ODS.operand_segment_sizes([1, 1]),
-        indexing_maps: gen_indexing_maps(input.shape, t.shape),
-        iterator_types: gen_iterator_types(input.shape, t.shape)
+        indexing_maps: Manx.Linalg.gen_indexing_maps(input.shape, t.shape),
+        iterator_types: Manx.Linalg.gen_iterator_types(input.shape, t.shape)
       ] do
         region do
           block bb0(arg0 >>> gen_type(type), out >>> gen_type(type)) do
@@ -663,8 +567,8 @@ defmodule Manx.Defn do
         b_value,
         out_tensor,
         operand_segment_sizes: ODS.operand_segment_sizes([2, 1]),
-        indexing_maps: gen_indexing_maps(a.shape, b.shape, t.shape),
-        iterator_types: gen_iterator_types(a.shape, b.shape, t.shape)
+        indexing_maps: Manx.Linalg.gen_indexing_maps(a.shape, b.shape, t.shape),
+        iterator_types: Manx.Linalg.gen_iterator_types(a.shape, b.shape, t.shape)
       ] do
         region do
           block bb0(arg0 >>> gen_type(type), arg1 >>> gen_type(type), out >>> gen_type(type)) do
@@ -1066,8 +970,8 @@ defmodule Manx.Defn do
         Linalg.generic [
           out_tensor,
           operand_segment_sizes: ODS.operand_segment_sizes([0, 1]),
-          indexing_maps: gen_indexing_maps(out_shape),
-          iterator_types: gen_iterator_types(out_shape)
+          indexing_maps: Manx.Linalg.gen_indexing_maps(out_shape),
+          iterator_types: Manx.Linalg.gen_iterator_types(out_shape)
         ] do
           region do
             block bb0(arg1 >>> gen_type(t.type)) do
