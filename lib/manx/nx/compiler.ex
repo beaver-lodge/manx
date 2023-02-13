@@ -11,6 +11,30 @@ defmodule Manx.Compiler do
   defp eval_arg(f) when is_function(f), do: f.()
   defp eval_arg(a), do: a
 
+  defp runtime_libs() do
+    case LLVMConfig.lib_dir() do
+      {:ok, llvm_lib_dir} ->
+        [
+          llvm_lib_dir |> Path.join("libmlir_c_runner_utils.dylib")
+        ]
+
+      _ ->
+        []
+    end
+  end
+
+  defp vulkan_runtime_libs() do
+    case LLVMConfig.lib_dir() do
+      {:ok, llvm_lib_dir} ->
+        [
+          llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib")
+        ]
+
+      _ ->
+        []
+    end
+  end
+
   @impl true
   def __jit__(key, vars, fun, [args], _options) do
     # call fun to generate expression tree
@@ -91,30 +115,20 @@ defmodule Manx.Compiler do
         end
       end
 
-    {:ok, llvm_lib_dir} = LLVMConfig.lib_dir()
-
-    runtime_libs = [
-      llvm_lib_dir |> Path.join("libmlir_c_runner_utils.dylib")
-    ]
-
     {llvm_ir, libs} =
       case args |> List.first() do
         arg0 when not is_nil(arg0) ->
           case arg0.data do
             %Nx.BinaryBackend{} ->
-              {Manx.Lowering.CPU.lower(ir), runtime_libs}
+              {Manx.Lowering.CPU.lower(ir), runtime_libs()}
 
             %Manx{device: device} ->
               case device do
                 :host ->
-                  {Manx.Lowering.CPU.lower(ir), runtime_libs}
+                  {Manx.Lowering.CPU.lower(ir), runtime_libs()}
 
                 :vulkan ->
-                  {Manx.Lowering.Vulkan.lower(ir),
-                   [
-                     llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib"),
-                     llvm_lib_dir |> Path.join("libmlir_runner_utils.dylib")
-                   ]}
+                  {Manx.Lowering.Vulkan.lower(ir), vulkan_runtime_libs()}
               end
           end
 
