@@ -1016,8 +1016,8 @@ defmodule Manx.ExprTest do
     end
   end
 
-  @describetag :runtime
   describe "slicing" do
+    @describetag :runtime
     defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
 
     defn slice1_dynamic(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(6), Nx.tensor(2)], [2, 1, 3])
