@@ -7,7 +7,7 @@ defmodule Manx.Slice do
   import Beaver, only: :macros
   require Beaver.MLIR
   alias MLIR.{Type, Attribute}
-  alias MLIR.Dialect.{TOSA, Linalg, Arith, Tensor, Bufferization, Math, SCF, MemRef}
+  alias MLIR.Dialect.{TOSA, Arith, Tensor, SCF, MemRef}
 
   def static_slice(
         %Env{block: block, ctx: ctx, gen_op: gen_op, gen_type: gen_type} = env,
