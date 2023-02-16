@@ -1016,7 +1016,7 @@ defmodule Manx.ExprTest do
     end
   end
 
-  @tag :runtime
+  @describetag :runtime
   describe "slicing" do
     defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
 
