@@ -516,7 +516,8 @@ defmodule Manx.Defn do
              :cbrt,
              :expm1,
              :log1p,
-             :bitcast
+             :bitcast,
+             :atan
            ] do
     mlir block: block, ctx: ctx do
       input_value = gen_op(env, input)
@@ -585,6 +586,9 @@ defmodule Manx.Defn do
 
                 :log1p ->
                   Math.log1p(arg0) >>> gen_type(type)
+
+                :atan ->
+                  Math.atan(arg0) >>> gen_type(type)
               end
 
             Linalg.yield(result) >>> []
