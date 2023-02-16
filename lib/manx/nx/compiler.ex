@@ -7,19 +7,44 @@ defmodule Manx.Compiler do
   alias Beaver.MLIR.Dialect.{Func}
   require Func
   @behaviour Nx.Defn.Compiler
+
+  defp eval_arg(f) when is_function(f), do: f.()
+  defp eval_arg(a), do: a
+
+  defp runtime_libs() do
+    case LLVMConfig.lib_dir() do
+      {:ok, llvm_lib_dir} ->
+        [
+          llvm_lib_dir |> Path.join("libmlir_c_runner_utils.dylib")
+        ]
+
+      _ ->
+        []
+    end
+  end
+
+  defp vulkan_runtime_libs() do
+    case LLVMConfig.lib_dir() do
+      {:ok, llvm_lib_dir} ->
+        [
+          llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib")
+        ]
+
+      _ ->
+        []
+    end
+  end
+
   @impl true
   def __jit__(key, vars, fun, [args], _options) do
-    # call fun to generated tree
+    # call fun to generate expression tree
     tree = fun.(vars)
-
     info = Function.info(key)
     uniq = info |> Keyword.get(:uniq)
     module = info |> Keyword.get(:module)
     name = info |> Keyword.get(:name)
-
-    symbol =
-      Module.concat([module, name, "#{uniq}"])
-      |> Atom.to_string()
+    symbol = Module.concat([module, name, "#{uniq}"]) |> Atom.to_string()
+    args = args |> Enum.map(&eval_arg/1)
 
     # generate ir
     entry_types =
@@ -34,8 +59,6 @@ defmodule Manx.Compiler do
     module_attrs =
       case args |> List.first() do
         arg0 when not is_nil(arg0) ->
-          arg0 = arg0 |> apply([])
-
           with %Manx{device: :vulkan} <- arg0.data do
             [
               "spirv.target_env":
@@ -95,25 +118,17 @@ defmodule Manx.Compiler do
     {llvm_ir, libs} =
       case args |> List.first() do
         arg0 when not is_nil(arg0) ->
-          arg0 = arg0 |> apply([])
-
           case arg0.data do
             %Nx.BinaryBackend{} ->
-              {Manx.Lowering.CPU.lower(ir), []}
+              {Manx.Lowering.CPU.lower(ir), runtime_libs()}
 
             %Manx{device: device} ->
               case device do
                 :host ->
-                  {Manx.Lowering.CPU.lower(ir), []}
+                  {Manx.Lowering.CPU.lower(ir), runtime_libs()}
 
                 :vulkan ->
-                  {:ok, llvm_lib_dir} = LLVMConfig.lib_dir()
-
-                  {Manx.Lowering.Vulkan.lower(ir),
-                   [
-                     llvm_lib_dir |> Path.join("libvulkan-runtime-wrappers.dylib"),
-                     llvm_lib_dir |> Path.join("libmlir_runner_utils.dylib")
-                   ]}
+                  {Manx.Lowering.Vulkan.lower(ir), vulkan_runtime_libs()}
               end
           end
 
@@ -182,6 +197,11 @@ defmodule Manx.Compiler do
         } = tensor
       ) do
     Manx.from_binary(tensor, binary, []) |> memref_from_tensor
+  end
+
+  def memref_from_tensor(%Nx.Tensor{shape: shape, data: %Nx.TemplateBackend{}}) do
+    # TODO: generate a magical deadbeef pointer for this
+    Beaver.Native.Memory.new(nil, sizes: shape |> Tuple.to_list(), type: Beaver.Native.F32)
   end
 
   def memref_from_tensor({}) do

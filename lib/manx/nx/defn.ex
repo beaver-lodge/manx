@@ -51,20 +51,23 @@ defmodule Manx.Defn do
     end
   end
 
-  def gen_op(%Env{block: block}, %Nx.Tensor{
-        data: %Nx.Defn.Expr{op: :parameter, args: [pos]}
-      })
+  def gen_op(
+        %Env{block: block},
+        %Nx.Tensor{
+          data: %Nx.Defn.Expr{op: :parameter, args: [pos]}
+        }
+      )
       when is_integer(pos) do
-    arg = block |> Beaver.MLIR.Block.get_arg!(pos)
-
     arg_cnt = Beaver.Walker.arguments(block) |> Enum.count()
 
     if pos >= arg_cnt do
-      raise "arg ##{pos} out of bound, arg_cnt: #{arg_cnt}"
+      raise "argument ##{pos} out of bound, argument count: #{arg_cnt}"
     end
 
+    arg = block |> Beaver.MLIR.CAPI.mlirBlockGetArgument(pos)
+
     if MLIR.is_null(arg) do
-      raise "arg ##{pos} not found"
+      raise "argument ##{pos} not found"
     end
 
     arg
@@ -242,6 +245,47 @@ defmodule Manx.Defn do
         %Nx.Tensor{shape: {}, data: %Nx.Defn.Expr{op: :all, args: [%{shape: {}} = input1, _]}}
       ) do
     gen_op(env, input1)
+  end
+
+  def gen_op(
+        %Env{block: block, ctx: ctx} = env,
+        %Nx.Tensor{
+          data: %Nx.Defn.Expr{
+            op: :squeeze,
+            args: [input, _axes]
+          }
+        } = t
+      ) do
+    mlir block: block, ctx: ctx do
+      input_value = gen_op(env, input)
+      source_type = gen_type(input) |> Beaver.Deferred.create(ctx)
+      target_type = gen_type(t) |> Beaver.Deferred.create(ctx)
+      reassociation = Tensor.reassociation_for_reshape(source_type, target_type)
+
+      if MLIR.is_null(reassociation) do
+        raise "fail to create reassociation"
+      end
+
+      Tensor.collapse_shape(input_value, reassociation: reassociation) >>> target_type
+    end
+  end
+
+  def gen_op(
+        %Env{} = env,
+        %Nx.Tensor{
+          data: %Nx.Defn.Expr{
+            op: :slice,
+            args: [_tensor, start_indices, _lengths, _strides]
+          }
+        } = t
+      ) do
+    env = %Env{env | gen_op: &gen_op/2, gen_type: &gen_type/1}
+
+    if Enum.all?(start_indices, &is_integer/1) do
+      Manx.Slice.static_slice(env, t)
+    else
+      Manx.Slice.dynamic_slice(env, t)
+    end
   end
 
   def gen_op(
@@ -471,7 +515,9 @@ defmodule Manx.Defn do
              :erf,
              :cbrt,
              :expm1,
-             :log1p
+             :log1p,
+             :bitcast,
+             :atan
            ] do
     mlir block: block, ctx: ctx do
       input_value = gen_op(env, input)
@@ -515,6 +561,9 @@ defmodule Manx.Defn do
                 :erf ->
                   Math.erf(arg0) >>> gen_type(type)
 
+                :bitcast ->
+                  Arith.bitcast(arg0) >>> gen_type(type)
+
                 :cbrt ->
                   abs =
                     case type do
@@ -537,6 +586,9 @@ defmodule Manx.Defn do
 
                 :log1p ->
                   Math.log1p(arg0) >>> gen_type(type)
+
+                :atan ->
+                  Math.atan(arg0) >>> gen_type(type)
               end
 
             Linalg.yield(result) >>> []
@@ -892,6 +944,9 @@ defmodule Manx.Defn do
         :bitwise_or ->
           TOSA.bitwise_or(a_value, b_value) >>> gen_type(t)
 
+        :bitwise_xor ->
+          TOSA.bitwise_xor(a_value, b_value) >>> gen_type(t)
+
         :left_shift ->
           TOSA.logical_left_shift(a_value, b_value) >>> gen_type(t)
 
@@ -954,6 +1009,16 @@ defmodule Manx.Defn do
         |> Attribute.dense_array(Beaver.Native.I64)
 
       TOSA.reshape(input, new_shape: new_shape) >>> gen_type(t)
+    end
+  end
+
+  def gen_op(
+        %Env{block: block, ctx: ctx} = env,
+        %Nx.Tensor{data: %Nx.Defn.Expr{op: :as_type, args: [input1]}} = t
+      ) do
+    mlir block: block, ctx: ctx do
+      input1_value = gen_op(env, input1)
+      TOSA.cast(input1_value) >>> gen_type(t)
     end
   end
 

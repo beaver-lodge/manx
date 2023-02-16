@@ -13,6 +13,14 @@ defmodule Manx.Assert do
     end
   end
 
+  defmacro assert_not_equal(left, right) do
+    # Assert against binary backend tensors to show diff on failure
+    quote do
+      assert unquote(left) |> Manx.Assert.to_binary_backend() !=
+               unquote(right) |> Manx.Assert.to_binary_backend()
+    end
+  end
+
   def to_binary_backend(tensor) do
     Nx.backend_copy(tensor, Nx.BinaryBackend)
   end
