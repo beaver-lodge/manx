@@ -44,6 +44,7 @@ defmodule Beaver.Defn.LocEmbTest do
   use ExUnit.Case, async: true
 
   @moduletag :nx
+  @moduletag :runtime
   setup do
     Nx.Defn.default_options(compiler: Manx.Compiler)
     :ok
