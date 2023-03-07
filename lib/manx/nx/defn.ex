@@ -22,35 +22,6 @@ defmodule Manx.Defn do
 
   def gen_root_types(type), do: [gen_type(type)]
 
-  defp gen_expand(
-         _env,
-         value,
-         %{shape: in_shape},
-         %{shape: out_shape}
-       )
-       when tuple_size(in_shape) == tuple_size(out_shape) do
-    value
-  end
-
-  defp gen_expand(
-         %Env{block: block, ctx: ctx},
-         value,
-         %{type: type, shape: in_shape} = input_t,
-         %{shape: out_shape} = _output_t
-       ) do
-    mlir block: block, ctx: ctx do
-      shape = Manx.Linalg.expand_for_output(in_shape, out_shape)
-      t = %{input_t | type: type, shape: shape}
-      rank_diff = tuple_size(out_shape) - tuple_size(in_shape)
-
-      pairs =
-        Range.new(0, tuple_size(in_shape) - 1, 1)
-        |> Enum.map(fn i -> [i, i + rank_diff] end)
-
-      Tensor.expand_shape(value, reassociation: Tensor.reassociation(pairs)) >>> gen_type(t)
-    end
-  end
-
   def gen_op(
         %Env{block: block},
         %Nx.Tensor{
@@ -606,9 +577,7 @@ defmodule Manx.Defn do
       when op in [:remainder, :atan2, :power] do
     mlir block: block, ctx: ctx do
       a_value = gen_op(env, a)
-      a_value = gen_expand(env, a_value, a, t)
       b_value = gen_op(env, b)
-      b_value = gen_expand(env, b_value, b, t)
 
       out_tensor =
         Bufferization.alloc_tensor(operand_segment_sizes: ODS.operand_segment_sizes([0, 0, 0])) >>>
@@ -619,7 +588,7 @@ defmodule Manx.Defn do
         b_value,
         out_tensor,
         operand_segment_sizes: ODS.operand_segment_sizes([2, 1]),
-        indexing_maps: Manx.Linalg.gen_indexing_maps(a.shape, b.shape, t.shape),
+        indexing_maps: Manx.Linalg.gen_indexing_maps([a.shape, b.shape], t.shape),
         iterator_types: Manx.Linalg.gen_iterator_types(a.shape, b.shape, t.shape)
       ] do
         region do
@@ -987,7 +956,6 @@ defmodule Manx.Defn do
       pred_value = gen_op(env, pred)
       pred_t = %{pred | type: {:u, 1}}
       pred_value = TOSA.cast(pred_value) >>> gen_type(pred_t)
-      pred_value = gen_expand(env, pred_value, pred_t, t)
       on_true_value = gen_op(env, on_true)
       on_false_value = gen_op(env, on_false)
       on_true_value = TOSA.cast(on_true_value) >>> gen_type(%{on_true | type: t.type})

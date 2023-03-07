@@ -3,21 +3,6 @@ defmodule Manx.Linalg do
   alias Beaver.MLIR
   alias Beaver.MLIR.Attribute
   @moduledoc false
-  defp gen_affine_map(shape) do
-    import MLIR.AffineMap
-    rank = tuple_size(shape)
-
-    exprs =
-      shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.map(fn
-        {1, _index} -> 0
-        {dim_size, index} when dim_size > 1 -> dim(index)
-      end)
-
-    MLIR.AffineMap.create(rank, 0, exprs)
-  end
 
   def expand_for_output(input_shape, output_shape)
       when tuple_size(output_shape) >= tuple_size(input_shape) do
@@ -27,35 +12,61 @@ defmodule Manx.Linalg do
     List.to_tuple(expanded)
   end
 
+  defp gen_identity(shape), do: &MLIR.CAPI.mlirAffineMapMultiDimIdentityGet(&1, tuple_size(shape))
+
+  defp gen_broadcast_minor_identity(in_shape, out_shape) do
+    rank = tuple_size(out_shape)
+    rank_diff = rank - tuple_size(in_shape)
+
+    zipped =
+      in_shape
+      |> expand_for_output(out_shape)
+      |> Tuple.to_list()
+      |> Enum.zip(Tuple.to_list(out_shape))
+
+    exprs =
+      for {{in_dim, out_dim}, index} <- zipped |> Enum.with_index(), index >= rank_diff do
+        case {in_dim, out_dim} do
+          {1, out_dim} when out_dim != 1 ->
+            0
+
+          _ ->
+            MLIR.AffineMap.dim(index)
+        end
+      end
+
+    MLIR.AffineMap.create(rank, 0, exprs)
+  end
+
+  defp maps_to_attr(maps) do
+    maps
+    |> Enum.map(&MLIR.Attribute.affine_map/1)
+    |> Attribute.array()
+  end
+
+  # unary, always identity
+  defp do_gen_indexing_maps(shape, shape) do
+    do_gen_indexing_maps([shape], shape)
+  end
+
+  defp do_gen_indexing_maps([shape], shape) do
+    gen_identity(shape)
+    |> List.duplicate(2)
+  end
+
+  # binary+, might broadcast
+  defp do_gen_indexing_maps(input_shapes, out_shape)
+       when is_list(input_shapes) and length(input_shapes) > 1 do
+    Enum.map(input_shapes, &gen_broadcast_minor_identity(&1, out_shape)) ++
+      [gen_identity(out_shape)]
+  end
+
+  def gen_indexing_maps(input_shapes, out_shape) do
+    do_gen_indexing_maps(input_shapes, out_shape) |> maps_to_attr
+  end
+
   def gen_indexing_maps(out_shape) do
-    [
-      gen_affine_map(out_shape)
-    ]
-    |> Enum.map(&MLIR.Attribute.affine_map/1)
-    |> Attribute.array()
-  end
-
-  def gen_indexing_maps(input1_shape, out_shape) do
-    [
-      expand_for_output(input1_shape, out_shape) |> gen_affine_map(),
-      gen_affine_map(out_shape)
-    ]
-    |> Enum.map(&MLIR.Attribute.affine_map/1)
-    |> Attribute.array()
-  end
-
-  def gen_indexing_maps(
-        input1_shape,
-        input2_shape,
-        out_shape
-      ) do
-    [
-      expand_for_output(input1_shape, out_shape) |> gen_affine_map(),
-      expand_for_output(input2_shape, out_shape) |> gen_affine_map(),
-      gen_affine_map(out_shape)
-    ]
-    |> Enum.map(&MLIR.Attribute.affine_map/1)
-    |> Attribute.array()
+    [gen_identity(out_shape)] |> maps_to_attr
   end
 
   def gen_iterator_types({}, {}) do
