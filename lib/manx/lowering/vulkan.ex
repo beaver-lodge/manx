@@ -60,7 +60,8 @@ defmodule Manx.Lowering.Vulkan do
       ~w{spirv-lower-abi-attrs spirv-update-vce}
     )
     |> convert_gpu_launch_to_vulkan_launch
-    |> convert_memref_to_llvm
+    |> MLIR.Pass.Composer.append("expand-strided-metadata")
+    |> MLIR.Pass.Composer.append("finalize-memref-to-llvm")
     |> MLIR.Pass.Composer.nested("func.func", "llvm-request-c-wrappers")
     |> convert_complex_to_standard()
     |> convert_vector_to_llvm
