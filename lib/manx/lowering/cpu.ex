@@ -36,7 +36,8 @@ defmodule Manx.Lowering.CPU do
     |> convert_complex_to_standard()
     |> convert_vector_to_llvm
     |> MLIR.Pass.Composer.nested("func.func", "expand-strided-metadata,memref-expand")
-    |> convert_memref_to_llvm
+    |> MLIR.Pass.Composer.append("expand-strided-metadata")
+    |> MLIR.Pass.Composer.append("finalize-memref-to-llvm")
     |> convert_complex_to_llvm()
     |> convert_func_to_llvm
     |> reconcile_unrealized_casts
@@ -75,7 +76,8 @@ defmodule Manx.Lowering.CPU do
     |> convert_math_to_libm
     |> convert_complex_to_standard()
     |> convert_vector_to_llvm
-    |> convert_memref_to_llvm
+    |> MLIR.Pass.Composer.append("expand-strided-metadata")
+    |> MLIR.Pass.Composer.append("finalize-memref-to-llvm")
     |> convert_complex_to_llvm()
     |> convert_func_to_llvm
     |> reconcile_unrealized_casts
