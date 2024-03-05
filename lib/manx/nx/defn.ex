@@ -288,7 +288,7 @@ defmodule Manx.Defn do
           fn axis, {in_shape, mlir_value} ->
             out_shape = List.replace_at(in_shape, axis, 1)
 
-            reduce_attr = [axis: Attribute.integer(Type.i64(), axis)]
+            reduce_attr = [axis: Attribute.integer(Type.i32(), axis)]
 
             reduced =
               case op do
@@ -668,10 +668,10 @@ defmodule Manx.Defn do
       b_value = gen_op(env, b)
       a_value = TOSA.cast(a_value) >>> gen_type(%{a | type: t.type})
       b_value = TOSA.cast(b_value) >>> gen_type(%{b | type: t.type})
-      c = TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i32(), 0)) >>> gen_type(a)
+      c = TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i8(), 0)) >>> gen_type(a)
 
       c =
-        TOSA.reduce_sum(c, axis: Attribute.integer(Type.i64(), 0)) >>> gen_type(%{t | shape: {1}})
+        TOSA.reduce_sum(c, axis: Attribute.integer(Type.i32(), 0)) >>> gen_type(%{t | shape: {1}})
 
       Tensor.collapse_shape(c, reassociation: Tensor.reassociation([])) >>> gen_type(t)
     end
@@ -930,11 +930,11 @@ defmodule Manx.Defn do
           end
 
         :multiply ->
-          TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i32(), 0)) >>> gen_type(t)
+          TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i8(), 0)) >>> gen_type(t)
 
         :divide ->
           b_r = TOSA.reciprocal(b_value) >>> b_t
-          TOSA.mul(a_value, b_r, shift: Attribute.integer(Type.i(32), 0)) >>> gen_type(t)
+          TOSA.mul(a_value, b_r, shift: Attribute.integer(Type.i8(), 0)) >>> gen_type(t)
 
         :quotient ->
           a_value = TOSA.cast(a_value) >>> gen_type(%{a | type: {:u, 32}})
