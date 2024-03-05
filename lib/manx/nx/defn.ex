@@ -421,7 +421,7 @@ defmodule Manx.Defn do
 
       SCF.for [lower, upper, step] do
         region do
-          block inner(index >>> Type.index()) do
+          block _(index >>> Type.index()) do
             complex_element = Tensor.extract(complex_tensor, index) >>> Type.complex(Type.f32())
             conjugate_element = Complex.conj(complex_element) >>> Type.complex(Type.f32())
             MemRef.store(conjugate_element, conjugate_memref, index) >>> []
@@ -461,7 +461,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Linalg.gen_iterator_types(in_shape, out_shape)
       ] do
         region do
-          block bb0(arg0 >>> Type.complex(Type.f32()), arg1 >>> Type.f(32)) do
+          block _(arg0 >>> Type.complex(Type.f32()), arg1 >>> Type.f(32)) do
             %MLIR.Value{} = arg1
             im = Complex.im(arg0) >>> Type.f32()
             Linalg.yield([im]) >>> []
@@ -506,7 +506,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Linalg.gen_iterator_types(input.shape, t.shape)
       ] do
         region do
-          block bb0(arg0 >>> gen_type(type), out >>> gen_type(type)) do
+          block _(arg0 >>> gen_type(type), out >>> gen_type(type)) do
             %MLIR.Value{} = out
 
             result =
@@ -592,7 +592,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Linalg.gen_iterator_types(a.shape, b.shape, t.shape)
       ] do
         region do
-          block bb0(arg0 >>> gen_type(type), arg1 >>> gen_type(type), out >>> gen_type(type)) do
+          block _(arg0 >>> gen_type(type), arg1 >>> gen_type(type), out >>> gen_type(type)) do
             %MLIR.Value{} = out
 
             result =
@@ -747,7 +747,7 @@ defmodule Manx.Defn do
       out_tensor =
         Linalg.fill [zero, out_tensor, operand_segment_sizes: ODS.operand_segment_sizes([1, 1])] do
           region do
-            block bb0(
+            block _(
                     arg >>> gen_type(t.type),
                     res >>> gen_type(t.type)
                   ) do
@@ -766,7 +766,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Nx.Batcher.gen_iterator_types(batched_a, batched_b, t)
       ] do
         region do
-          block bb0(
+          block _(
                   left >>> gen_type(t.type),
                   right >>> gen_type(t.type),
                   sum >>> gen_type(t.type)
@@ -1007,7 +1007,7 @@ defmodule Manx.Defn do
           iterator_types: Manx.Linalg.gen_iterator_types(out_shape)
         ] do
           region do
-            block bb0(arg1 >>> gen_type(t.type)) do
+            block _(arg1 >>> gen_type(t.type)) do
               %MLIR.Value{} = arg1
               index = Linalg.index(dim: Attribute.integer(Type.i64(), axis)) >>> Type.index()
               cast = Arith.index_cast(index) >>> gen_type(t.type)
