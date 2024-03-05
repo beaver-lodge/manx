@@ -73,6 +73,7 @@ defmodule Manx.Compiler do
       end
 
     ctx = MLIR.Context.create()
+    Beaver.Diagnostic.attach(ctx)
 
     ir =
       mlir ctx: ctx do
