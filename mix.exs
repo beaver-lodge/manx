@@ -25,7 +25,7 @@ defmodule Manx.MixProject do
   defp deps do
     [
       {:nx, "~> 0.4.2"},
-      {:beaver, "~> 0.2.17"},
+      {:beaver, "~> 0.3.4"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
