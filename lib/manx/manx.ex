@@ -11,13 +11,20 @@ defmodule Manx do
   alias Nx.Tensor, as: T
   alias __MODULE__, as: B
 
-  @impl true
+  @impl Nx.Backend
+  def init(keyword) do
+    ctx = Beaver.MLIR.Context.create()
+    Beaver.Diagnostic.attach(ctx)
+    keyword ++ [ctx: ctx]
+  end
+
+  @impl Nx.Backend
   def constant(out, constant, backend_options) do
     binary_tensor = Nx.BinaryBackend.constant(out, constant, [])
     Nx.BinaryBackend.backend_transfer(binary_tensor, __MODULE__, backend_options)
   end
 
-  @impl true
+  @impl Nx.Backend
   def from_binary(%T{shape: shape, type: type} = tensor, binary, backend_options) do
     shape = Tuple.to_list(shape)
     device = Keyword.get(backend_options, :device, :host)
@@ -33,13 +40,13 @@ defmodule Manx do
     put_in(tensor.data, %B{memory: memory, device: device})
   end
 
-  @impl true
+  @impl Nx.Backend
   def to_binary(%T{shape: _shape, data: %B{memory: memory}} = tensor, limit) do
     Beaver.Native.Memory.aligned(memory)
     |> Beaver.Native.OpaquePtr.to_binary(limit * div(element_size(tensor), 8))
   end
 
-  @impl true
+  @impl Nx.Backend
   def inspect(%T{} = tensor, inspect_opts) do
     limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
 
@@ -50,7 +57,7 @@ defmodule Manx do
 
   defp element_size(%T{type: {_, size}}), do: size
 
-  @impl true
+  @impl Nx.Backend
   def backend_copy(tensor, Nx.Tensor, backend_options) do
     backend_copy(tensor, Nx.BinaryBackend, backend_options)
   end
@@ -71,7 +78,7 @@ defmodule Manx do
     )
   end
 
-  @impl true
+  @impl Nx.Backend
   def backend_transfer(
         %T{data: %B{memory: memory}} = tensor,
         backend,
@@ -91,7 +98,7 @@ defmodule Manx do
     end
   end
 
-  @impl true
+  @impl Nx.Backend
   def backend_deallocate(%T{data: %B{memory: memory}}) do
     memory |> Manx.MemrefAllocator.delete()
   end
@@ -134,7 +141,7 @@ defmodule Manx do
   require Nx.Defn.Expr
   ## JIT callbacks
 
-  @impl true
+  @impl Nx.Backend
   def concatenate(out, tensors, axis) do
     out = Nx.to_template(out)
 
@@ -145,7 +152,7 @@ defmodule Manx do
     jit(expr_fun, [List.to_tuple(tensors)])
   end
 
-  @impl true
+  @impl Nx.Backend
   def slice(out, tensor, start_indices, lengths, strides) do
     out = Nx.to_template(out)
 
@@ -164,7 +171,7 @@ defmodule Manx do
     end
   end
 
-  @impl true
+  @impl Nx.Backend
   def put_slice(out, tensor, start_indices, slice) do
     out = Nx.to_template(out)
 
@@ -183,7 +190,7 @@ defmodule Manx do
     end
   end
 
-  @impl true
+  @impl Nx.Backend
   def optional(_name, args, fun) do
     # Here we take the leading tensor arguments and pass them as JIT arguments
     {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
@@ -258,7 +265,6 @@ defmodule Manx do
       {:qr, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
       {:eigh, [:tensor, :opts], [:tensor]},
-      {:svd, [:tensor, :opts], [:tensor]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}
     ] ++
@@ -269,7 +275,7 @@ defmodule Manx do
     args = Enum.map(args, &Macro.var(&1, __MODULE__))
     tensor_args = Enum.map(tensor_args, &Macro.var(&1, __MODULE__))
 
-    @impl true
+    @impl Nx.Backend
     def unquote(name)(out, unquote_splicing(args)) do
       out = Nx.to_template(out)
 
