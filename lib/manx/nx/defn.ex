@@ -288,7 +288,7 @@ defmodule Manx.Defn do
           fn axis, {in_shape, mlir_value} ->
             out_shape = List.replace_at(in_shape, axis, 1)
 
-            reduce_attr = [axis: Attribute.integer(Type.i64(), axis)]
+            reduce_attr = [axis: Attribute.integer(Type.i32(), axis)]
 
             reduced =
               case op do
@@ -421,7 +421,7 @@ defmodule Manx.Defn do
 
       SCF.for [lower, upper, step] do
         region do
-          block inner(index >>> Type.index()) do
+          block _(index >>> Type.index()) do
             complex_element = Tensor.extract(complex_tensor, index) >>> Type.complex(Type.f32())
             conjugate_element = Complex.conj(complex_element) >>> Type.complex(Type.f32())
             MemRef.store(conjugate_element, conjugate_memref, index) >>> []
@@ -461,7 +461,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Linalg.gen_iterator_types(in_shape, out_shape)
       ] do
         region do
-          block bb0(arg0 >>> Type.complex(Type.f32()), arg1 >>> Type.f(32)) do
+          block _(arg0 >>> Type.complex(Type.f32()), arg1 >>> Type.f(32)) do
             %MLIR.Value{} = arg1
             im = Complex.im(arg0) >>> Type.f32()
             Linalg.yield([im]) >>> []
@@ -506,7 +506,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Linalg.gen_iterator_types(input.shape, t.shape)
       ] do
         region do
-          block bb0(arg0 >>> gen_type(type), out >>> gen_type(type)) do
+          block _(arg0 >>> gen_type(type), out >>> gen_type(type)) do
             %MLIR.Value{} = out
 
             result =
@@ -592,7 +592,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Linalg.gen_iterator_types(a.shape, b.shape, t.shape)
       ] do
         region do
-          block bb0(arg0 >>> gen_type(type), arg1 >>> gen_type(type), out >>> gen_type(type)) do
+          block _(arg0 >>> gen_type(type), arg1 >>> gen_type(type), out >>> gen_type(type)) do
             %MLIR.Value{} = out
 
             result =
@@ -668,10 +668,10 @@ defmodule Manx.Defn do
       b_value = gen_op(env, b)
       a_value = TOSA.cast(a_value) >>> gen_type(%{a | type: t.type})
       b_value = TOSA.cast(b_value) >>> gen_type(%{b | type: t.type})
-      c = TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i32(), 0)) >>> gen_type(a)
+      c = TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i8(), 0)) >>> gen_type(a)
 
       c =
-        TOSA.reduce_sum(c, axis: Attribute.integer(Type.i64(), 0)) >>> gen_type(%{t | shape: {1}})
+        TOSA.reduce_sum(c, axis: Attribute.integer(Type.i32(), 0)) >>> gen_type(%{t | shape: {1}})
 
       Tensor.collapse_shape(c, reassociation: Tensor.reassociation([])) >>> gen_type(t)
     end
@@ -747,7 +747,7 @@ defmodule Manx.Defn do
       out_tensor =
         Linalg.fill [zero, out_tensor, operand_segment_sizes: ODS.operand_segment_sizes([1, 1])] do
           region do
-            block bb0(
+            block _(
                     arg >>> gen_type(t.type),
                     res >>> gen_type(t.type)
                   ) do
@@ -766,7 +766,7 @@ defmodule Manx.Defn do
         iterator_types: Manx.Nx.Batcher.gen_iterator_types(batched_a, batched_b, t)
       ] do
         region do
-          block bb0(
+          block _(
                   left >>> gen_type(t.type),
                   right >>> gen_type(t.type),
                   sum >>> gen_type(t.type)
@@ -804,7 +804,7 @@ defmodule Manx.Defn do
       when is_list(inputs) do
     mlir block: block, ctx: ctx do
       inputs = inputs |> Enum.map(&gen_op(env, &1))
-      TOSA.concat(inputs, axis: Attribute.integer(Type.i(64), axis)) >>> gen_type(t)
+      TOSA.concat(inputs, axis: Attribute.integer(Type.i32(), axis)) >>> gen_type(t)
     end
   end
 
@@ -930,11 +930,11 @@ defmodule Manx.Defn do
           end
 
         :multiply ->
-          TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i32(), 0)) >>> gen_type(t)
+          TOSA.mul(a_value, b_value, shift: Attribute.integer(Type.i8(), 0)) >>> gen_type(t)
 
         :divide ->
           b_r = TOSA.reciprocal(b_value) >>> b_t
-          TOSA.mul(a_value, b_r, shift: Attribute.integer(Type.i(32), 0)) >>> gen_type(t)
+          TOSA.mul(a_value, b_r, shift: Attribute.integer(Type.i8(), 0)) >>> gen_type(t)
 
         :quotient ->
           a_value = TOSA.cast(a_value) >>> gen_type(%{a | type: {:u, 32}})
@@ -1007,7 +1007,7 @@ defmodule Manx.Defn do
           iterator_types: Manx.Linalg.gen_iterator_types(out_shape)
         ] do
           region do
-            block bb0(arg1 >>> gen_type(t.type)) do
+            block _(arg1 >>> gen_type(t.type)) do
               %MLIR.Value{} = arg1
               index = Linalg.index(dim: Attribute.integer(Type.i64(), axis)) >>> Type.index()
               cast = Arith.index_cast(index) >>> gen_type(t.type)
