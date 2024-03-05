@@ -609,7 +609,7 @@ defmodule Manx.Defn do
                       Arith.remsi(arg0, arg1) >>> gen_type(type)
                   end
 
-                :power ->
+                :pow ->
                   case type do
                     {:f, _} ->
                       Math.powf(arg0, arg1) >>> gen_type(type)

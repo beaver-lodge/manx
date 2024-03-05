@@ -353,7 +353,7 @@ defmodule Manx.ExprTest do
       end
     end
 
-    defn power_two(a, b), do: Nx.power(a, b)
+    defn power_two(a, b), do: Nx.pow(a, b)
 
     test "power" do
       for {left, right} <- @tensors do
@@ -368,8 +368,8 @@ defmodule Manx.ExprTest do
             nil
 
           _ ->
-            assert_all_close(power_two(left, right), Nx.power(left, right))
-            assert_all_close(power_two(right, left), Nx.power(right, left))
+            assert_all_close(power_two(left, right), Nx.pow(left, right))
+            assert_all_close(power_two(right, left), Nx.pow(right, left))
         end
       end
     end

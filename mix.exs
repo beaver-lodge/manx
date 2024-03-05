@@ -24,7 +24,7 @@ defmodule Manx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.4.2"},
+      {:nx, "~> 0.7"},
       {:beaver, "~> 0.3.4"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
