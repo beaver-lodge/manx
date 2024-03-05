@@ -804,7 +804,7 @@ defmodule Manx.Defn do
       when is_list(inputs) do
     mlir block: block, ctx: ctx do
       inputs = inputs |> Enum.map(&gen_op(env, &1))
-      TOSA.concat(inputs, axis: Attribute.integer(Type.i(64), axis)) >>> gen_type(t)
+      TOSA.concat(inputs, axis: Attribute.integer(Type.i32(), axis)) >>> gen_type(t)
     end
   end
 
