@@ -204,7 +204,7 @@ defmodule Manx do
   end
 
   binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
+    [:add, :subtract, :multiply, :pow, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
       [:logical_and, :logical_or, :logical_xor]
@@ -220,8 +220,6 @@ defmodule Manx do
     [
       {:eye, [:backend_options], []},
       {:iota, [:axis, :backend_options], []},
-      {:random_uniform, [:min, :max, :backend_options], [:min, :max]},
-      {:random_normal, [:mu, :sigma, :backend_options], [:mu, :sigma]},
       {:as_type, [:tensor], [:tensor]},
       {:bitcast, [:tensor], [:tensor]},
       {:reshape, [:tensor], [:tensor]},
@@ -234,7 +232,7 @@ defmodule Manx do
       {:clip, [:tensor, :min, :max], [:tensor, :min, :max]},
       {:take, [:tensor, :indices, :axis], [:tensor, :indices]},
       {:take_along_axis, [:tensor, :indices, :axis], [:tensor, :indices]},
-      {:gather, [:input, :indices], [:input, :indices]},
+      {:gather, [:input, :indices, :opts], [:input, :indices]},
       {:select, [:pred, :on_true, :on_false], [:pred, :on_true, :on_false]},
       {:conv, [:tensor, :kernel, :opts], [:tensor, :kernel]},
       {:all, [:tensor, :opts], [:tensor]},
@@ -258,13 +256,10 @@ defmodule Manx do
        [:tensor, :source, :init_value]},
       {:window_scatter_min, [:tensor, :source, :init_value, :window_dims, :opts],
        [:tensor, :source, :init_value]},
-      {:indexed_add, [:tensor, :indices, :updates], [:tensor, :indices, :updates]},
-      {:indexed_put, [:tensor, :indices, :updates], [:tensor, :indices, :updates]},
-      {:cholesky, [:tensor], [:tensor]},
+      {:indexed_add, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
+      {:indexed_put, [:tensor, :indices, :updates, :opts], [:tensor, :indices, :updates]},
       {:lu, [:tensor, :opts], [:tensor]},
-      {:qr, [:tensor, :opts], [:tensor]},
       {:triangular_solve, [:a, :b, :opts], [:a, :b]},
-      {:eigh, [:tensor, :opts], [:tensor]},
       {:fft, [:tensor, :opts], [:tensor]},
       {:ifft, [:tensor, :opts], [:tensor]}
     ] ++

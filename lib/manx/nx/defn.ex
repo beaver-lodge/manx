@@ -574,7 +574,7 @@ defmodule Manx.Defn do
         %Env{block: block, ctx: ctx} = env,
         %Nx.Tensor{type: type, data: %Nx.Defn.Expr{op: op, args: [a, b]}} = t
       )
-      when op in [:remainder, :atan2, :power] do
+      when op in [:remainder, :atan2, :pow] do
     mlir block: block, ctx: ctx do
       a_value = gen_op(env, a)
       b_value = gen_op(env, b)
