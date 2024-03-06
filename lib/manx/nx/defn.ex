@@ -150,7 +150,6 @@ defmodule Manx.Defn do
              :abs,
              :bitwise_not,
              :exp,
-             :logical_not,
              :log,
              :tanh,
              :rsqrt,
@@ -171,11 +170,6 @@ defmodule Manx.Defn do
 
         :bitwise_not ->
           TOSA.bitwise_not(input1_value) >>> gen_type(t)
-
-        :logical_not ->
-          input1_value = TOSA.cast(input1_value) >>> gen_type(%{t | type: {:u, 1}})
-          result = TOSA.logical_not(input1_value) >>> gen_type(%{t | type: {:u, 1}})
-          TOSA.cast(result) >>> gen_type(t)
 
         :exp ->
           TOSA.exp(input1_value) >>> gen_type(t)
@@ -574,7 +568,7 @@ defmodule Manx.Defn do
         %Env{block: block, ctx: ctx} = env,
         %Nx.Tensor{type: type, data: %Nx.Defn.Expr{op: op, args: [a, b]}} = t
       )
-      when op in [:remainder, :atan2, :power] do
+      when op in [:remainder, :atan2, :pow] do
     mlir block: block, ctx: ctx do
       a_value = gen_op(env, a)
       b_value = gen_op(env, b)
@@ -609,7 +603,7 @@ defmodule Manx.Defn do
                       Arith.remsi(arg0, arg1) >>> gen_type(type)
                   end
 
-                :power ->
+                :pow ->
                   case type do
                     {:f, _} ->
                       Math.powf(arg0, arg1) >>> gen_type(type)
@@ -632,18 +626,18 @@ defmodule Manx.Defn do
   def gen_op(env, %Nx.Tensor{
         data: %Nx.Defn.Expr{
           op: :optional,
-          args:
-            [
-              %{
-                data: %{op: :logical_not}
-              },
-              %{
-                data: %{op: :equal}
-              }
-            ] = list
+          args: alternatives
         }
       }) do
-    gen_op(env, List.first(list))
+    tensor =
+      alternatives
+      |> Enum.find(fn
+        %Nx.Tensor{data: %{op: :equal}} -> true
+        %Nx.Tensor{data: %{op: :logical_not}} -> false
+        _ -> true
+      end)
+
+    gen_op(env, tensor)
   end
 
   # dot product
