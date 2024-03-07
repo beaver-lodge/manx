@@ -100,6 +100,7 @@ defmodule Manx.Nx.Interoperability do
         f
       end
       |> Enum.map(&[name: to_string(&1[:file]), line: &1[:line], ctx: ctx])
+      |> Enum.reject(&String.starts_with?(&1[:name], "lib/process.ex"))
       |> Enum.map(&MLIR.Location.file(&1))
 
     MLIR.CAPI.mlirLocationFusedGet(
