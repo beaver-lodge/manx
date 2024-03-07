@@ -37,7 +37,7 @@ defmodule Manx.Compiler do
   end
 
   # Invoke MLIR JIT with Nx tensors. If there are tuples their memrefs will be packed into a single C struct.
-  def invoke(return, args, jit, symbol) do
+  defp invoke(return, args, jit, symbol) do
     import Manx.Nx.Interoperability
     # pack the tensor tuples into a C struct
     jit_args =
@@ -56,6 +56,32 @@ defmodule Manx.Compiler do
     # unpack the C struct into tensor tuples
     populate_tensor_from_memref(return, return_struct)
     |> Manx.add_allocated_memory()
+  end
+
+  defp module_attrs([tensor | _]), do: module_attrs(tensor)
+
+  defp module_attrs(%Nx.Tensor{data: %Manx{device: :vulkan}}) do
+    [
+      "spirv.target_env":
+        ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
+    ]
+  end
+
+  defp module_attrs(_), do: []
+
+  defp lower(ir, []), do: {Manx.Lowering.CPU.lower(ir), runtime_libs()}
+  defp lower(ir, [tensor | _]), do: lower(ir, tensor)
+
+  defp lower(ir, %Nx.Tensor{data: %Nx.BinaryBackend{}}) do
+    {Manx.Lowering.CPU.lower(ir), runtime_libs()}
+  end
+
+  defp lower(ir, %Nx.Tensor{data: %Manx{device: :host}}) do
+    {Manx.Lowering.CPU.lower(ir), runtime_libs()}
+  end
+
+  defp lower(ir, %Nx.Tensor{data: %Manx{device: :vulkan}}) do
+    {Manx.Lowering.Vulkan.lower(ir), vulkan_runtime_libs()}
   end
 
   @doc false
@@ -89,28 +115,12 @@ defmodule Manx.Compiler do
       args_list = args_list |> Enum.map(&eval_arg/1)
 
       for args <- args_list do
-        module_attrs =
-          case args |> List.first() do
-            arg0 when not is_nil(arg0) ->
-              with %Manx{device: :vulkan} <- arg0.data do
-                [
-                  "spirv.target_env":
-                    ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
-                ]
-              else
-                _ -> []
-              end
-
-            _ ->
-              []
-          end
-
         ctx = MLIR.Context.create()
         Beaver.Diagnostic.attach(ctx)
 
         ir =
           mlir ctx: ctx do
-            module(module_attrs) do
+            module(module_attrs(args)) do
               function_type =
                 Type.function(
                   entry_types,
@@ -152,49 +162,25 @@ defmodule Manx.Compiler do
             end
           end
 
-        {llvm_ir, libs} =
-          case args |> List.first() do
-            arg0 when not is_nil(arg0) ->
-              case arg0.data do
-                %Nx.BinaryBackend{} ->
-                  {Manx.Lowering.CPU.lower(ir), runtime_libs()}
+        case lower(ir, args) do
+          {{:ok, llvm_ir}, libs} ->
+            jit =
+              llvm_ir
+              |> MLIR.ExecutionEngine.create!(shared_lib_paths: libs)
 
-                %Manx{device: device} ->
-                  case device do
-                    :host ->
-                      {Manx.Lowering.CPU.lower(ir), runtime_libs()}
+            # invoke jit and setting return for tree
+            tree_return =
+              tree
+              |> Manx.tensor_of_null_memref()
+              |> invoke(args, jit, symbol)
 
-                    :vulkan ->
-                      {Manx.Lowering.Vulkan.lower(ir), vulkan_runtime_libs()}
-                  end
-              end
+            MLIR.Context.destroy(ctx)
+            tree_return
 
-            _ ->
-              {Manx.Lowering.CPU.lower(ir), []}
-          end
-
-        llvm_ir =
-          case llvm_ir do
-            {:ok, op} ->
-              op
-
-            {:error, msg} ->
-              MLIR.Context.destroy(ctx)
-              raise msg
-          end
-
-        jit =
-          llvm_ir
-          |> MLIR.ExecutionEngine.create!(shared_lib_paths: libs)
-
-        # invoke jit and setting return for tree
-        tree_return =
-          tree
-          |> Manx.tensor_of_null_memref()
-          |> invoke(args, jit, symbol)
-
-        MLIR.CAPI.mlirContextDestroy(ctx)
-        tree_return
+          {{:error, msg}, _} ->
+            MLIR.Context.destroy(ctx)
+            raise msg
+        end
       end
     end
   end
