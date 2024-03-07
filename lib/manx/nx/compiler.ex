@@ -117,17 +117,17 @@ defmodule Manx.Compiler do
                   Manx.Defn.gen_root_types(tree)
                 )
 
-              fused_loc =
+              stacktrace_loc =
                 Process.info(self(), :current_stacktrace)
                 |> Manx.Nx.Interoperability.loc_from_stack_trace(ctx)
 
               Func.func manx_main(
                           sym_name: "\"#{symbol}\"",
                           function_type: function_type,
-                          loc: fused_loc
+                          loc: stacktrace_loc
                         ) do
                 region do
-                  locs = List.duplicate(fused_loc, length(entry_types))
+                  locs = List.duplicate(stacktrace_loc, length(entry_types))
 
                   entry =
                     MLIR.Block.create(
@@ -138,10 +138,10 @@ defmodule Manx.Compiler do
                   mlir block: entry do
                     case Manx.Defn.gen_op(%Manx.Defn.Env{block: entry, ctx: ctx}, tree) do
                       ret = %Beaver.MLIR.Value{} ->
-                        Func.return(ret) >>> []
+                        Func.return(ret, loc: stacktrace_loc) >>> []
 
                       tuple_ret when is_tuple(tuple_ret) ->
-                        Func.return(Tuple.to_list(tuple_ret)) >>> []
+                        Func.return(Tuple.to_list(tuple_ret), loc: stacktrace_loc) >>> []
                     end
                   end
 
