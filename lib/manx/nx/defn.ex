@@ -291,11 +291,13 @@ defmodule Manx.Defn do
                     gen_type(%{t | shape: List.to_tuple(out_shape), type: {:u, 1}})
 
                 :sum ->
-                  loc =
-                    Process.info(self(), :current_stacktrace)
-                    |> Manx.Nx.Interoperability.loc_from_stack_trace(ctx)
-
-                  TOSA.reduce_sum(mlir_value, reduce_attr, loc: loc) >>>
+                  TOSA.reduce_sum(mlir_value, reduce_attr,
+                    loc:
+                      Manx.Nx.Interoperability.loc_from_stack_trace(
+                        Process.info(self(), :current_stacktrace),
+                        ctx
+                      )
+                  ) >>>
                     gen_type(%{t | shape: List.to_tuple(out_shape)})
               end
 
@@ -697,11 +699,13 @@ defmodule Manx.Defn do
       a_value = gen_op(env, a)
       b_value = gen_op(env, b)
 
-      loc =
-        Process.info(self(), :current_stacktrace)
-        |> Manx.Nx.Interoperability.loc_from_stack_trace(ctx)
-
-      TOSA.matmul(a_value, b_value, loc: loc) >>> gen_type(t)
+      TOSA.matmul(a_value, b_value,
+        loc:
+          Manx.Nx.Interoperability.loc_from_stack_trace(
+            Process.info(self(), :current_stacktrace),
+            ctx
+          )
+      ) >>> gen_type(t)
     end
   end
 
