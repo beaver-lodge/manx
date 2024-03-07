@@ -110,6 +110,23 @@ defmodule Manx.Compiler do
 
         ir =
           mlir ctx: ctx do
+            {:current_stacktrace, frames} = Process.info(self(), :current_stacktrace)
+
+            stacktrace_locs =
+              for {_, _, _, f} <- frames do
+                f
+              end
+              |> Enum.map(&[name: to_string(&1[:file]), line: &1[:line], ctx: ctx])
+              |> Enum.map(&MLIR.Location.file(&1))
+
+            fused_loc =
+              MLIR.CAPI.mlirLocationFusedGet(
+                ctx,
+                length(stacktrace_locs),
+                Beaver.Native.array(stacktrace_locs, MLIR.Location),
+                MLIR.Attribute.null()
+              )
+
             module(module_attrs) do
               function_type =
                 Type.function(
@@ -119,10 +136,11 @@ defmodule Manx.Compiler do
 
               Func.func manx_main(
                           sym_name: "\"#{symbol}\"",
-                          function_type: function_type
+                          function_type: function_type,
+                          loc: fused_loc
                         ) do
                 region do
-                  locs = List.duplicate(MLIR.Location.unknown(), length(entry_types))
+                  locs = List.duplicate(fused_loc, length(entry_types))
 
                   entry =
                     MLIR.Block.create(
