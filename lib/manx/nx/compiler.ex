@@ -36,6 +36,28 @@ defmodule Manx.Compiler do
     end
   end
 
+  # Invoke MLIR JIT with Nx tensors. If there are tuples their memrefs will be packed into a single C struct.
+  def invoke(return, args, jit, symbol) do
+    import Manx.Nx.Interoperability
+    # pack the tensor tuples into a C struct
+    jit_args =
+      [return_struct | _] =
+      [return | args]
+      |> Enum.map(&memref_from_tensor/1)
+
+    if List.improper?(jit_args), do: raise("jit arguments is not a proper list")
+
+    MLIR.ExecutionEngine.invoke!(
+      jit,
+      symbol,
+      jit_args |> Enum.map(&Beaver.Native.Memory.descriptor_ptr/1)
+    )
+
+    # unpack the C struct into tensor tuples
+    populate_tensor_from_memref(return, return_struct)
+    |> Manx.add_allocated_memory()
+  end
+
   @doc false
   @impl Nx.Defn.Compiler
   def __jit__(key, vars, fun, args_list, options) do
@@ -172,31 +194,6 @@ defmodule Manx.Compiler do
         tree_return
       end
     end
-  end
-
-  @doc """
-  Invoke MLIR JIT with Nx tensors. If there are tuples their memrefs will be packed into a single C struct.
-  """
-
-  def invoke(return, args, jit, symbol) do
-    import Manx.Nx.Interoperability
-    # pack the tensor tuples into a C struct
-    jit_args =
-      [return_struct | _] =
-      [return | args]
-      |> Enum.map(&memref_from_tensor/1)
-
-    if List.improper?(jit_args), do: raise("jit arguments is not a proper list")
-
-    MLIR.ExecutionEngine.invoke!(
-      jit,
-      symbol,
-      jit_args |> Enum.map(&Beaver.Native.Memory.descriptor_ptr/1)
-    )
-
-    # unpack the C struct into tensor tuples
-    populate_tensor_from_memref(return, return_struct)
-    |> Manx.add_allocated_memory()
   end
 
   @doc false
