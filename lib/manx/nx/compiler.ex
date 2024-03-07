@@ -130,10 +130,8 @@ defmodule Manx.Compiler do
                       locs |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context()))
                     )
 
-                  root = Manx.Defn.gen_op(%Manx.Defn.Env{block: entry, ctx: ctx}, tree)
-
                   mlir block: entry do
-                    case root do
+                    case Manx.Defn.gen_op(%Manx.Defn.Env{block: entry, ctx: ctx}, tree) do
                       ret = %Beaver.MLIR.Value{} ->
                         Func.return(ret) >>> []
 
