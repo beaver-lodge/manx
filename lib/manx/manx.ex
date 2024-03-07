@@ -285,4 +285,7 @@ defmodule Manx do
   def jit(function, args, options \\ []) do
     Nx.Defn.jit_apply(function, args, Keyword.put(options, :compiler, __MODULE__))
   end
+
+  @impl Nx.Backend
+  def to_batched(_out, _tensor, _keyword), do: raise("not implemented")
 end

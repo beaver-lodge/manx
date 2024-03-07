@@ -282,4 +282,25 @@ defmodule Manx.Compiler do
 
     tensors |> List.to_tuple()
   end
+
+  @doc false
+  @impl Nx.Defn.Compiler
+  def __stream__(
+        _key,
+        _input,
+        _acc,
+        _vars,
+        _fun,
+        _args_list,
+        _opts
+      ),
+      do: raise("not implemented")
+
+  @doc false
+  @impl Nx.Defn.Compiler
+  def __to_backend__(_keyword), do: raise("not implemented")
+
+  @doc false
+  @impl Nx.Defn.Compiler
+  def __partitions_options__(_keyword), do: raise("not implemented")
 end
