@@ -282,7 +282,7 @@ defmodule Manx do
     end
   end
 
-  def jit(function, args, options \\ []) do
+  defp jit(function, args, options \\ []) do
     Nx.Defn.jit_apply(function, args, Keyword.put(options, :compiler, __MODULE__))
   end
 
