@@ -697,7 +697,11 @@ defmodule Manx.Defn do
       a_value = gen_op(env, a)
       b_value = gen_op(env, b)
 
-      TOSA.matmul(a_value, b_value) >>> gen_type(t)
+      loc =
+        Process.info(self(), :current_stacktrace)
+        |> Manx.Nx.Interoperability.loc_from_stack_trace(ctx)
+
+      TOSA.matmul(a_value, b_value, loc: loc) >>> gen_type(t)
     end
   end
 
