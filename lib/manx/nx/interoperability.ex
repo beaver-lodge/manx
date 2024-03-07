@@ -1,7 +1,9 @@
 defmodule Manx.Nx.Interoperability do
   @moduledoc """
-  Functions for interoperability between NX tensor and MemRef.
+  Functions for interoperability between Elixir/NX and LLVM/MLIR. For instance the data transfer between NX tensor and MemRef.
   """
+
+  alias Beaver.MLIR
 
   @doc """
   - If it is a tensor, return a memref
@@ -86,5 +88,25 @@ defmodule Manx.Nx.Interoperability do
       end)
 
     tensors |> List.to_tuple()
+  end
+
+  def loc_from_stack_trace({:current_stacktrace, frames}, ctx) do
+    loc_from_stack_trace(frames, ctx)
+  end
+
+  def loc_from_stack_trace(frames, ctx) do
+    stacktrace_locs =
+      for {_, _, _, f} <- frames do
+        f
+      end
+      |> Enum.map(&[name: to_string(&1[:file]), line: &1[:line], ctx: ctx])
+      |> Enum.map(&MLIR.Location.file(&1))
+
+    MLIR.CAPI.mlirLocationFusedGet(
+      ctx,
+      length(stacktrace_locs),
+      Beaver.Native.array(stacktrace_locs, MLIR.Location),
+      MLIR.Attribute.null()
+    )
   end
 end
