@@ -9,6 +9,7 @@ defmodule Manx.Compiler do
   @behaviour Nx.Defn.Compiler
 
   defp eval_arg(f) when is_function(f), do: f.()
+  defp eval_arg(list) when is_list(list), do: Enum.map(list, &eval_arg/1)
   defp eval_arg(a), do: a
 
   defp runtime_libs() do
@@ -35,8 +36,15 @@ defmodule Manx.Compiler do
     end
   end
 
-  @impl true
-  def __jit__(key, vars, fun, [args], _options) do
+  @doc false
+  @impl Nx.Defn.Compiler
+  def __jit__(key, vars, fun, args_list, options) do
+    __compile__(key, vars, fun, options).(args_list)
+  end
+
+  @doc false
+  @impl Nx.Defn.Compiler
+  def __compile__(key, vars, fun, _options) do
     # call fun to generate expression tree
     tree = fun.(vars)
     info = Function.info(key)
@@ -44,7 +52,6 @@ defmodule Manx.Compiler do
     module = info |> Keyword.get(:module)
     name = info |> Keyword.get(:name)
     symbol = Module.concat([module, name, "#{uniq}"]) |> Atom.to_string()
-    args = args |> Enum.map(&eval_arg/1)
 
     # generate ir
     entry_types =
@@ -56,109 +63,115 @@ defmodule Manx.Compiler do
           acc ++ [Manx.Defn.gen_type(t)]
       end)
 
-    module_attrs =
-      case args |> List.first() do
-        arg0 when not is_nil(arg0) ->
-          with %Manx{device: :vulkan} <- arg0.data do
-            [
-              "spirv.target_env":
-                ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
-            ]
-          else
-            _ -> []
+    fn args_list ->
+      args_list = args_list |> Enum.map(&eval_arg/1)
+
+      for args <- args_list do
+        module_attrs =
+          case args |> List.first() do
+            arg0 when not is_nil(arg0) ->
+              with %Manx{device: :vulkan} <- arg0.data do
+                [
+                  "spirv.target_env":
+                    ~a"#spirv.target_env<#spirv.vce<v1.0, [Shader], [SPV_KHR_storage_buffer_storage_class]>, #spirv.resource_limits<>>"
+                ]
+              else
+                _ -> []
+              end
+
+            _ ->
+              []
           end
 
-        _ ->
-          []
-      end
+        ctx = MLIR.Context.create()
+        Beaver.Diagnostic.attach(ctx)
 
-    ctx = MLIR.Context.create()
-    Beaver.Diagnostic.attach(ctx)
-
-    ir =
-      mlir ctx: ctx do
-        module(module_attrs) do
-          function_type =
-            Type.function(
-              entry_types,
-              Manx.Defn.gen_root_types(tree)
-            )
-
-          Func.func manx_main(
-                      sym_name: "\"#{symbol}\"",
-                      function_type: function_type
-                    ) do
-            region do
-              locs = List.duplicate(MLIR.Location.unknown(), length(entry_types))
-
-              entry =
-                MLIR.Block.create(
-                  entry_types |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context())),
-                  locs |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context()))
+        ir =
+          mlir ctx: ctx do
+            module(module_attrs) do
+              function_type =
+                Type.function(
+                  entry_types,
+                  Manx.Defn.gen_root_types(tree)
                 )
 
-              root = Manx.Defn.gen_op(%Manx.Defn.Env{block: entry, ctx: ctx}, tree)
+              Func.func manx_main(
+                          sym_name: "\"#{symbol}\"",
+                          function_type: function_type
+                        ) do
+                region do
+                  locs = List.duplicate(MLIR.Location.unknown(), length(entry_types))
 
-              mlir block: entry do
-                case root do
-                  ret = %Beaver.MLIR.Value{} ->
-                    Func.return(ret) >>> []
+                  entry =
+                    MLIR.Block.create(
+                      entry_types |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context())),
+                      locs |> Enum.map(&Beaver.Deferred.create(&1, Beaver.Env.context()))
+                    )
 
-                  tuple_ret when is_tuple(tuple_ret) ->
-                    Func.return(Tuple.to_list(tuple_ret)) >>> []
+                  root = Manx.Defn.gen_op(%Manx.Defn.Env{block: entry, ctx: ctx}, tree)
+
+                  mlir block: entry do
+                    case root do
+                      ret = %Beaver.MLIR.Value{} ->
+                        Func.return(ret) >>> []
+
+                      tuple_ret when is_tuple(tuple_ret) ->
+                        Func.return(Tuple.to_list(tuple_ret)) >>> []
+                    end
+                  end
+
+                  Beaver.Env.region()
+                  |> Beaver.MLIR.CAPI.mlirRegionAppendOwnedBlock(entry)
                 end
               end
-
-              Beaver.Env.region()
-              |> Beaver.MLIR.CAPI.mlirRegionAppendOwnedBlock(entry)
             end
           end
-        end
-      end
 
-    {llvm_ir, libs} =
-      case args |> List.first() do
-        arg0 when not is_nil(arg0) ->
-          case arg0.data do
-            %Nx.BinaryBackend{} ->
-              {Manx.Lowering.CPU.lower(ir), runtime_libs()}
-
-            %Manx{device: device} ->
-              case device do
-                :host ->
+        {llvm_ir, libs} =
+          case args |> List.first() do
+            arg0 when not is_nil(arg0) ->
+              case arg0.data do
+                %Nx.BinaryBackend{} ->
                   {Manx.Lowering.CPU.lower(ir), runtime_libs()}
 
-                :vulkan ->
-                  {Manx.Lowering.Vulkan.lower(ir), vulkan_runtime_libs()}
+                %Manx{device: device} ->
+                  case device do
+                    :host ->
+                      {Manx.Lowering.CPU.lower(ir), runtime_libs()}
+
+                    :vulkan ->
+                      {Manx.Lowering.Vulkan.lower(ir), vulkan_runtime_libs()}
+                  end
               end
+
+            _ ->
+              {Manx.Lowering.CPU.lower(ir), []}
           end
 
-        _ ->
-          {Manx.Lowering.CPU.lower(ir), []}
+        llvm_ir =
+          case llvm_ir do
+            {:ok, op} ->
+              op
+
+            {:error, msg} ->
+              MLIR.Context.destroy(ctx)
+              raise msg
+          end
+
+        jit =
+          llvm_ir
+          |> MLIR.ExecutionEngine.create!(shared_lib_paths: libs)
+
+        # invoke jit and setting return for tree
+        tree_return =
+          tree
+          |> Manx.tensor_of_null_memref()
+          |> invoke(args, jit, symbol)
+
+        MLIR.CAPI.mlirContextDestroy(ctx)
+        tree_return
       end
-
-    llvm_ir =
-      case llvm_ir do
-        {:ok, op} ->
-          op
-
-        {:error, msg} ->
-          MLIR.Context.destroy(ctx)
-          raise msg
-      end
-
-    jit =
-      llvm_ir
-      |> MLIR.ExecutionEngine.create!(shared_lib_paths: libs)
-
-    # invoke jit and setting return for tree
-    tree_return =
-      tree
-      |> Manx.tensor_of_null_memref()
-      |> invoke(args, jit, symbol)
-
-    MLIR.CAPI.mlirContextDestroy(ctx)
-    [tree_return]
+    end
   end
 
   @doc """
