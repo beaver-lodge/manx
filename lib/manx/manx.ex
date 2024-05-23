@@ -126,7 +126,6 @@ defmodule Manx do
   Add returned memref to the allocator.
   """
   def add_allocated_memory(%T{data: %B{memory: memory}} = tensor) do
-    memory = memory |> Beaver.Native.Memory.own_allocated()
     memory |> Manx.MemrefAllocator.add()
     put_in(tensor.data.memory, memory)
   end

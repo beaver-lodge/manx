@@ -131,7 +131,12 @@ defmodule Manx.Defn do
         MLIR.CAPI.mlirDenseElementsAttrRawBufferGet(
           gen_type(t) |> Beaver.Deferred.create(ctx),
           byte_size(binary),
-          Beaver.Native.c_string(binary) |> Beaver.Native.Array.as_opaque()
+          MLIR.StringRef.create(binary)
+          |> then(fn s ->
+            %{ref: MLIR.CAPI.beaverStringRefGetData(s), element_kind: Beaver.Native.U8}
+            |> Beaver.Native.Array.as_opaque()
+            |> Map.get(:ref)
+          end)
         )
 
       if MLIR.Attribute.is_null(tensor_attr), do: raise("fail to parse tensor dense elements")
