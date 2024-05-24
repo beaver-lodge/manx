@@ -131,7 +131,12 @@ defmodule Manx.Defn do
         MLIR.CAPI.mlirDenseElementsAttrRawBufferGet(
           gen_type(t) |> Beaver.Deferred.create(ctx),
           byte_size(binary),
-          Beaver.Native.c_string(binary) |> Beaver.Native.Array.as_opaque()
+          MLIR.StringRef.create(binary)
+          |> then(fn s ->
+            %{ref: MLIR.CAPI.beaverStringRefGetData(s), element_kind: Beaver.Native.U8}
+            |> Beaver.Native.Array.as_opaque()
+            |> Map.get(:ref)
+          end)
         )
 
       if MLIR.Attribute.is_null(tensor_attr), do: raise("fail to parse tensor dense elements")
@@ -291,11 +296,13 @@ defmodule Manx.Defn do
                     gen_type(%{t | shape: List.to_tuple(out_shape), type: {:u, 1}})
 
                 :sum ->
-                  loc =
-                    Process.info(self(), :current_stacktrace)
-                    |> Manx.Nx.Interoperability.loc_from_stack_trace(ctx)
-
-                  TOSA.reduce_sum(mlir_value, reduce_attr, loc: loc) >>>
+                  TOSA.reduce_sum(mlir_value, reduce_attr,
+                    loc:
+                      Manx.Nx.Interoperability.loc_from_stack_trace(
+                        Process.info(self(), :current_stacktrace),
+                        ctx
+                      )
+                  ) >>>
                     gen_type(%{t | shape: List.to_tuple(out_shape)})
               end
 
@@ -697,7 +704,13 @@ defmodule Manx.Defn do
       a_value = gen_op(env, a)
       b_value = gen_op(env, b)
 
-      TOSA.matmul(a_value, b_value) >>> gen_type(t)
+      TOSA.matmul(a_value, b_value,
+        loc:
+          Manx.Nx.Interoperability.loc_from_stack_trace(
+            Process.info(self(), :current_stacktrace),
+            ctx
+          )
+      ) >>> gen_type(t)
     end
   end
 
@@ -937,7 +950,7 @@ defmodule Manx.Defn do
         :quotient ->
           a_value = TOSA.cast(a_value) >>> gen_type(%{a | type: {:u, 32}})
           b_value = TOSA.cast(b_value) >>> gen_type(%{b | type: {:u, 32}})
-          result = TOSA.div(a_value, b_value) >>> gen_type(%{t | type: {:u, 32}})
+          result = TOSA.int_div(a_value, b_value) >>> gen_type(%{t | type: {:u, 32}})
           TOSA.cast(result) >>> gen_type(t)
 
         _ ->

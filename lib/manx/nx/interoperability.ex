@@ -99,8 +99,10 @@ defmodule Manx.Nx.Interoperability do
       for {_, _, _, f} <- frames do
         f
       end
-      |> Enum.map(&[name: to_string(&1[:file]), line: &1[:line], ctx: ctx])
-      |> Enum.map(&MLIR.Location.file(&1))
+      |> Stream.map(&[name: to_string(&1[:file]), line: &1[:line], ctx: ctx])
+      |> Stream.reject(&String.starts_with?(&1[:name], "lib/process.ex"))
+      |> Stream.map(&MLIR.Location.file(&1))
+      |> Enum.to_list()
 
     MLIR.CAPI.mlirLocationFusedGet(
       ctx,

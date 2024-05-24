@@ -163,9 +163,9 @@ defmodule Manx.Compiler do
           end
 
         case lower(ir, args) do
-          {{:ok, llvm_ir}, libs} ->
+          {{:ok, mod}, libs} ->
             jit =
-              llvm_ir
+              mod
               |> MLIR.ExecutionEngine.create!(shared_lib_paths: libs)
 
             # invoke jit and setting return for tree
@@ -174,6 +174,7 @@ defmodule Manx.Compiler do
               |> Manx.tensor_of_null_memref()
               |> invoke(args, jit, symbol)
 
+            MLIR.Module.destroy(mod)
             MLIR.Context.destroy(ctx)
             tree_return
 
