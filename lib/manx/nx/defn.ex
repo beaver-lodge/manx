@@ -950,7 +950,7 @@ defmodule Manx.Defn do
         :quotient ->
           a_value = TOSA.cast(a_value) >>> gen_type(%{a | type: {:u, 32}})
           b_value = TOSA.cast(b_value) >>> gen_type(%{b | type: {:u, 32}})
-          result = TOSA.div(a_value, b_value) >>> gen_type(%{t | type: {:u, 32}})
+          result = TOSA.int_div(a_value, b_value) >>> gen_type(%{t | type: {:u, 32}})
           TOSA.cast(result) >>> gen_type(t)
 
         _ ->
